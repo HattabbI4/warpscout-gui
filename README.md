@@ -27,7 +27,7 @@
 
 Скачайте подходящую сборку со страницы [Releases](https://github.com/HattabbI4/warpscout-gui/releases):
 
-- **`warpscout-gui_<версия>_windows_amd64_standalone.exe`** — автономная версия со встроенными библиотеками .NET 8 (~71 МБ). Запускается сразу на любой Windows 10/11 (x64) без дополнительной настройки.
+- **`warpscout-gui_<версия>_windows_amd64_standalone.exe`** — автономная версия со встроенными библиотеками .NET 8 (~66 МБ). Запускается сразу на любой Windows 10/11 (x64) без дополнительной настройки.
 - **`warpscout-gui_<версия>_windows_amd64_lite.exe`** — облегчённая версия без встроенных библиотек (~6 МБ). Требует установленного [.NET 8 Desktop Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
 
 
@@ -41,5 +41,5 @@
 dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
 
 # Полностью автономный exe (не требует установленного .NET 8 на целевом ПК)
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
 ```

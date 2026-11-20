@@ -27,7 +27,7 @@
 
 Grab the right build from the [Releases](https://github.com/HattabbI4/warpscout-gui/releases) page:
 
-- **`warpscout-gui_<version>_windows_amd64_standalone.exe`** — self-contained build bundled with the .NET 8 runtime (~71 MB). Runs out of the box on any Windows 10/11 (x64) machine with zero prerequisites.
+- **`warpscout-gui_<version>_windows_amd64_standalone.exe`** — self-contained build bundled with the .NET 8 runtime (~66 MB). Runs out of the box on any Windows 10/11 (x64) machine with zero prerequisites.
 - **`warpscout-gui_<version>_windows_amd64_lite.exe`** — framework-dependent build (~6 MB). Requires the [.NET 8 Desktop Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) installed on your system.
 
 ## Building from Source (Windows 10/11)
@@ -39,5 +39,5 @@ Requires the .NET 8 SDK.
 dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
 
 # Self-contained single-file build (runs on any Windows 10/11 PC without .NET installed)
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
 ```
