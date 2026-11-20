@@ -13,6 +13,16 @@
 - **Поиск серверов в 1 клик:** потоковая таблица для **AmneziaWG**, **WireGuard**, **MASQUE** и **MASQUE H2** с замером пинга внутри туннеля.
 - **Быстрые действия и трей:** скачивание готового `.conf` / `.json`, включение локального SOCKS5-прокси `127.0.0.1:1080`, сворачивание в системный трей и предупреждение при выходе с активным прокси (с запоминанием выбора).
 
+## Скриншоты
+
+![Сканер серверов](docs/screenshots/scanner-ru.png)
+
+![Сканер серверов со свёрнутым меню](docs/screenshots/scanner-collapsed-ru.png)
+
+![Таблица найденных серверов и локальный SOCKS5-прокси](docs/screenshots/servers-ru.png)
+
+![Настройки](docs/screenshots/settings-ru.png)
+
 ## Установка
 
 Скачайте подходящую сборку со страницы [Releases](https://github.com/HattabbI4/warpscout-gui/releases):

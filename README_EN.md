@@ -13,6 +13,16 @@
 - **One-Click Server Discovery:** Live-streaming endpoint table for **AmneziaWG**, **WireGuard**, **MASQUE**, and **MASQUE H2**, complete with in-tunnel latency checks.
 - **Quick Actions & System Tray:** Export ready-to-use `.conf` / `.json` configs, toggle a local SOCKS5 proxy on `127.0.0.1:1080`, minimize to the system tray, and confirm exit when the proxy is active (with an option to remember your choice).
 
+## Screenshots
+
+![Server Scanner](docs/screenshots/scanner-en.png)
+
+![Server Scanner with collapsed sidebar](docs/screenshots/scanner-collapsed-en.png)
+
+![Discovered Servers and Local SOCKS5 Proxy](docs/screenshots/servers-en.png)
+
+![Settings](docs/screenshots/settings-en.png)
+
 ## Installation
 
 Grab the right build from the [Releases](https://github.com/HattabbI4/warpscout-gui/releases) page:
