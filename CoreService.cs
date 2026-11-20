@@ -14,6 +14,7 @@ public static class CoreService
     private const string GithubLatestApi = "https://api.github.com/repos/HattabbI4/warpscout/releases/latest";
 
     private static readonly HttpClient Http = CreateHttpClient();
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
 
     private static HttpClient CreateHttpClient()
     {
@@ -49,10 +50,52 @@ public static class CoreService
         try
         {
             Directory.CreateDirectory(AppDataDir);
-            var json = JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(s, IndentedJson);
             File.WriteAllText(SettingsPath, json);
         }
         catch { }
+    }
+
+    public static string LastScanPath => Path.Combine(AppDataDir, "last-scan.json");
+
+    public static SavedScan? LoadLastScan(string? path = null)
+    {
+        var target = string.IsNullOrWhiteSpace(path) ? LastScanPath : path;
+        try
+        {
+            if (!File.Exists(target)) return null;
+            var scan = JsonSerializer.Deserialize<SavedScan>(File.ReadAllText(target));
+            if (scan == null || scan.Endpoints == null || scan.Endpoints.Count == 0)
+                return null;
+            scan.Endpoints = scan.Endpoints
+                .Where(e => e != null && !string.IsNullOrWhiteSpace(e.Endpoint))
+                .ToList();
+            return scan.Endpoints.Count > 0 ? scan : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static void SaveLastScan(SavedScan scan, string? path = null)
+    {
+        var target = string.IsNullOrWhiteSpace(path) ? LastScanPath : path;
+        var tmp = target + ".tmp";
+        try
+        {
+            var dir = Path.GetDirectoryName(target);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(scan, IndentedJson);
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, target, overwrite: true);
+        }
+        catch { }
+        finally
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+        }
     }
 
     public static string ResolveCorePath(AppSettings settings)
@@ -316,7 +359,7 @@ public static class CoreService
             if (proto == "masque-h2")
                 obj[isV6 ? "endpoint_h2_v6" : "endpoint_h2_v4"] = host;
 
-            return JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(obj, IndentedJson);
         }
 
         var addr = string.IsNullOrWhiteSpace(acc.IPv4) ? "172.16.0.2" : acc.IPv4;

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 
 namespace WarpscoutGui;
 
@@ -87,6 +88,13 @@ public sealed class Strings : INotifyPropertyChanged
     // Servers Page
     public string ServersTitle => T("Рабочие серверы", "Working Servers");
     public string ServersSubtitle => T("Нажмите на эндпоинт, чтобы скопировать адрес в буфер обмена", "Click an endpoint to copy its address to clipboard");
+    public string LastScanTime(DateTimeOffset scannedAt)
+    {
+        var local = scannedAt.ToLocalTime();
+        return T(
+            $"Сканирование: {local.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture)}",
+            $"Scanned: {local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}");
+    }
     public string ColLocation => T("Локация", "Location");
     public string ColNode => T("Нода", "Node");
     public string ColEndpoint => T("Эндпоинт", "Endpoint");

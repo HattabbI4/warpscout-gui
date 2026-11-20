@@ -495,4 +495,95 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Empty(MainWindow.SplitCliArgs(""));
         Assert.Empty(MainWindow.SplitCliArgs("   \t  "));
     }
+
+    // --- Last scan persistence & localization tests ---
+
+    [Fact]
+    public void LastScan_SaveAndLoadRoundTrip_AndHandlesInvalidFiles()
+    {
+        var missingPath = Path.Combine(_tempDir, "missing-scan.json");
+        Assert.Null(CoreService.LoadLastScan(missingPath));
+
+        var malformedPath = WriteTempFile("bad-scan.json", "{invalid");
+        Assert.Null(CoreService.LoadLastScan(malformedPath));
+
+        var emptyEndpointsPath = WriteTempFile("empty-scan.json", """{"ScannedAt":"2026-11-21T10:00:00+00:00","Proto":"awg","Endpoints":[]}""");
+        Assert.Null(CoreService.LoadLastScan(emptyEndpointsPath));
+
+        var scanPath = Path.Combine(_tempDir, "nested", "last-scan.json");
+        var scannedAt = new DateTimeOffset(2026, 11, 21, 14, 5, 0, TimeSpan.FromHours(5));
+        var scan = new SavedScan
+        {
+            ScannedAt = scannedAt,
+            Proto = "masque",
+            BestEndpoint = "162.159.198.2:443",
+            Endpoints =
+            [
+                new SavedEndpoint
+                {
+                    Endpoint = "162.159.198.1:443",
+                    Node = "FRA",
+                    Country = "DE",
+                    City = "Frankfurt",
+                    Location = "Frankfurt, DE",
+                    PingMs = 38.5,
+                    TunPingMs = 44.2,
+                    Loss = 0.0,
+                    SpeedMbps = 95.4,
+                },
+                new SavedEndpoint { Endpoint = "   ", Node = "BAD" },
+                new SavedEndpoint
+                {
+                    Endpoint = "162.159.198.2:443",
+                    Node = "AMS",
+                    Country = "NL",
+                    City = "Amsterdam",
+                    Location = "Amsterdam, NL",
+                    PingMs = 41.0,
+                    TunPingMs = 43.0,
+                    Loss = 1.5,
+                    SpeedMbps = 120.8,
+                },
+            ],
+        };
+
+        CoreService.SaveLastScan(scan, scanPath);
+
+        Assert.True(File.Exists(scanPath));
+        Assert.False(File.Exists(scanPath + ".tmp"));
+
+        var loaded = CoreService.LoadLastScan(scanPath);
+        Assert.NotNull(loaded);
+        Assert.Equal(scannedAt, loaded.ScannedAt);
+        Assert.Equal("masque", loaded.Proto);
+        Assert.Equal("162.159.198.2:443", loaded.BestEndpoint);
+        Assert.Equal(2, loaded.Endpoints.Count);
+
+        var first = loaded.Endpoints[0];
+        Assert.Equal("162.159.198.1:443", first.Endpoint);
+        Assert.Equal("FRA", first.Node);
+        Assert.Equal("DE", first.Country);
+        Assert.Equal("Frankfurt", first.City);
+        Assert.Equal("Frankfurt, DE", first.Location);
+        Assert.Equal(38.5, first.PingMs);
+        Assert.Equal(44.2, first.TunPingMs);
+        Assert.Equal(0.0, first.Loss);
+        Assert.Equal(95.4, first.SpeedMbps);
+
+        Assert.Equal("162.159.198.2:443", loaded.Endpoints[1].Endpoint);
+    }
+
+    [Fact]
+    public void Strings_LastScanTime_FormatsLocalizedDateAndTime()
+    {
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 11, 21, 14, 5, 0));
+        var otherOffset = localOffset == TimeSpan.Zero ? TimeSpan.FromHours(3) : TimeSpan.Zero;
+        var timestamp = new DateTimeOffset(2026, 11, 21, 14, 5, 0, localOffset).ToOffset(otherOffset);
+
+        Strings.Instance.SetLanguage("ru");
+        Assert.Equal("Сканирование: 21.11.2026 14:05", Strings.Instance.LastScanTime(timestamp));
+
+        Strings.Instance.SetLanguage("en");
+        Assert.Equal("Scanned: 2026-11-21 14:05", Strings.Instance.LastScanTime(timestamp));
+    }
 }

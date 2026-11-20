@@ -24,6 +24,8 @@ public partial class MainWindow : FluentWindow
     private string _accountPath = "";
     private AccountData? _account;
     private string _selectedProto = "awg";
+    private DateTimeOffset? _lastScanTime;
+    private string? _bestEndpoint;
 
     private Process? _scanProcess;
     private CancellationTokenSource? _scanCts;
@@ -52,6 +54,7 @@ public partial class MainWindow : FluentWindow
 
         GridEndpoints.ItemsSource = _endpoints;
         LoadSettingsIntoUI();
+        LoadLastScanIntoUI();
         UpdateHeroSubtitle();
         _isInitializing = false;
 
@@ -73,6 +76,86 @@ public partial class MainWindow : FluentWindow
         TxtExcludeNode.Text = _settings.ExcludedNode;
         TglMinimizeToTray.IsChecked = _settings.MinimizeToTray;
         TglWarnOnExit.IsChecked = _settings.WarnOnCloseWithProxy;
+    }
+
+    private void LoadLastScanIntoUI()
+    {
+        var saved = CoreService.LoadLastScan();
+        if (saved == null) return;
+
+        if (!string.IsNullOrWhiteSpace(saved.Proto))
+        {
+            _selectedProto = saved.Proto;
+            foreach (var item in CmbProto.Items.OfType<ComboBoxItem>())
+            {
+                if (item.Tag is string tag && string.Equals(tag, saved.Proto, StringComparison.OrdinalIgnoreCase))
+                {
+                    CmbProto.SelectedItem = item;
+                    break;
+                }
+            }
+        }
+
+        foreach (var ep in saved.Endpoints)
+        {
+            if (_endpointMap.ContainsKey(ep.Endpoint))
+                continue;
+            var item = new EndpointItem
+            {
+                Endpoint = ep.Endpoint,
+                Node = ep.Node,
+                Country = ep.Country,
+                City = ep.City,
+                Location = ep.Location,
+                PingMs = ep.PingMs,
+                TunPingMs = ep.TunPingMs,
+                Loss = ep.Loss,
+                SpeedMbps = ep.SpeedMbps,
+            };
+            _endpointMap[ep.Endpoint] = item;
+            InsertSorted(item);
+        }
+
+        _bestEndpoint = string.IsNullOrWhiteSpace(saved.BestEndpoint) ? null : saved.BestEndpoint;
+        _lastScanTime = saved.ScannedAt != default ? saved.ScannedAt.ToLocalTime() : null;
+    }
+
+    private void SaveCurrentScan(string proto)
+    {
+        if (_endpoints.Count == 0 || _lastScanTime == null) return;
+        var scan = new SavedScan
+        {
+            ScannedAt = _lastScanTime.Value,
+            Proto = proto,
+            BestEndpoint = _endpoints.FirstOrDefault(x => x.IsBest)?.Endpoint ?? "",
+            Endpoints = _endpoints.Select(ep => new SavedEndpoint
+            {
+                Endpoint = ep.Endpoint,
+                Node = ep.Node,
+                Country = ep.Country,
+                City = ep.City,
+                Location = ep.Location,
+                PingMs = ep.PingMs,
+                TunPingMs = ep.TunPingMs,
+                Loss = ep.Loss,
+                SpeedMbps = ep.SpeedMbps,
+            }).ToList(),
+        };
+        CoreService.SaveLastScan(scan);
+    }
+
+    private void UpdateLastScanTimeUI()
+    {
+        if (_lastScanTime.HasValue && _endpoints.Count > 0)
+        {
+            TxtLastScanTime.Text = Strings.Instance.LastScanTime(_lastScanTime.Value);
+            LastScanBadge.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            TxtLastScanTime.Text = "";
+            LastScanBadge.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void SetupTray()
@@ -193,7 +276,7 @@ public partial class MainWindow : FluentWindow
     }
 
     private void BtnGoToServers_Click(object sender, RoutedEventArgs e) => SelectPage("servers");
-    private void BtnGoToScanner_Click(object sender, RoutedEventArgs e) => SelectPage("scanner");
+    private void BtnGoToScanner_Click(object sender, RoutedEventArgs e) => SelectPage(_isAdvancedScanMode ? "advanced" : "scanner");
 
     private async Task RefreshCoreAndAccountAsync()
     {
@@ -468,6 +551,7 @@ public partial class MainWindow : FluentWindow
             item.RefreshLocale();
         UpdateSocksUI(_socksProcess != null && !_socksProcess.HasExited);
         TxtServersSubtitle.Text = s.ServersSubtitle;
+        UpdateLastScanTimeUI();
         if (_endpoints.Count == 0 && ScanProgressCard.Visibility != Visibility.Visible)
             TxtEmptyTable.Text = s.EmptyTableInitial;
         if (_scanCts == null && ScanProgressCard.Visibility != Visibility.Visible)
@@ -587,6 +671,8 @@ public partial class MainWindow : FluentWindow
         TxtHeroTitle.Text = enabled ? s.HeroReady : s.HeroScanning;
         ScanOptionsCards.IsEnabled = enabled;
         AdvancedOptionsCard.IsEnabled = enabled;
+        NavScanner.IsEnabled = enabled || !_isAdvancedScanMode;
+        NavAdvanced.IsEnabled = enabled || _isAdvancedScanMode;
     }
 
     private void BtnToggleScanLogs_Click(object sender, RoutedEventArgs e)
@@ -623,6 +709,7 @@ public partial class MainWindow : FluentWindow
 
     private async Task StartScanAsync()
     {
+        if (_scanCts != null) return;
         var s = Strings.Instance;
         if (string.IsNullOrEmpty(_corePath) || !File.Exists(_corePath))
         {
@@ -632,6 +719,9 @@ public partial class MainWindow : FluentWindow
 
         _endpoints.Clear();
         _endpointMap.Clear();
+        _bestEndpoint = null;
+        _lastScanTime = null;
+        UpdateLastScanTimeUI();
         RefreshBestFlags();
         TxtEmptyTable.Text = s.TableScanning;
 
@@ -646,6 +736,10 @@ public partial class MainWindow : FluentWindow
         _scanCts = new CancellationTokenSource();
         var ct = _scanCts.Token;
         SetScanControlsEnabled(false);
+
+        bool gotDone = false;
+        bool hasError = false;
+        string scanProto = _selectedProto;
 
         try
         {
@@ -735,6 +829,7 @@ public partial class MainWindow : FluentWindow
                 if (ChkSpeed.IsChecked == true) psi.ArgumentList.Add("-speed");
             }
 
+            scanProto = _selectedProto;
             AppendScanLog($"$ warpscout {string.Join(' ', psi.ArgumentList)}");
 
             using var proc = Process.Start(psi) ?? throw new InvalidOperationException(s.ScanStartErr);
@@ -754,7 +849,6 @@ public partial class MainWindow : FluentWindow
                 }
             }, CancellationToken.None);
 
-            bool gotDone = false;
             while (await proc.StandardOutput.ReadLineAsync(ct) is { } line)
             {
                 var trimmed = line.Trim();
@@ -797,6 +891,7 @@ public partial class MainWindow : FluentWindow
                 }
                 else if (ev.Event == "error")
                 {
+                    hasError = true;
                     ShowScanError(string.IsNullOrWhiteSpace(ev.Error) ? s.ScanErrorDefault : ev.Error);
                 }
             }
@@ -805,6 +900,7 @@ public partial class MainWindow : FluentWindow
 
             if (!_scanStoppedByUser && !gotDone && proc.ExitCode != 0)
             {
+                hasError = true;
                 string errText;
                 lock (stderrLines) errText = string.Join(" | ", stderrLines);
                 ShowScanError(string.IsNullOrEmpty(errText) ? s.ProcessExitedCode(proc.ExitCode) : errText);
@@ -820,7 +916,11 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            if (!_scanStoppedByUser) ShowScanError(ex.Message);
+            if (!_scanStoppedByUser)
+            {
+                hasError = true;
+                ShowScanError(ex.Message);
+            }
         }
         finally
         {
@@ -828,8 +928,16 @@ public partial class MainWindow : FluentWindow
             _scanCts?.Dispose();
             _scanCts = null;
             SetScanControlsEnabled(true);
-            if (_endpoints.Count == 0 && ScanErrorBox.Visibility != Visibility.Visible)
+            if (_endpoints.Count > 0 && !hasError && (gotDone || _scanStoppedByUser))
+            {
+                _lastScanTime = DateTimeOffset.Now;
+                UpdateLastScanTimeUI();
+                SaveCurrentScan(scanProto);
+            }
+            else if (_endpoints.Count == 0 && ScanErrorBox.Visibility != Visibility.Visible)
+            {
                 TxtEmptyTable.Text = s.EmptyTableAfterScan;
+            }
         }
     }
 
@@ -888,8 +996,11 @@ public partial class MainWindow : FluentWindow
     private void RefreshBestFlags(string? explicitBest = null)
     {
         var s = Strings.Instance;
+        if (explicitBest != null)
+            _bestEndpoint = string.IsNullOrWhiteSpace(explicitBest) ? null : explicitBest;
+        var hasExplicitBest = !string.IsNullOrEmpty(_bestEndpoint) && _endpoints.Any(x => x.Endpoint == _bestEndpoint);
         for (int i = 0; i < _endpoints.Count; i++)
-            _endpoints[i].IsBest = !string.IsNullOrEmpty(explicitBest) ? _endpoints[i].Endpoint == explicitBest : i == 0;
+            _endpoints[i].IsBest = hasExplicitBest ? _endpoints[i].Endpoint == _bestEndpoint : i == 0;
 
         EmptyTablePanel.Visibility = _endpoints.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         NavServersBadge.Visibility = !_isSidebarCollapsed && _endpoints.Count > 0 ? Visibility.Visible : Visibility.Collapsed;

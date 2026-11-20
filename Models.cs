@@ -17,6 +17,27 @@ public sealed class AppSettings
     public string CustomScanFlags { get; set; } = "-p awg -P -exclude-node DME";
 }
 
+public sealed class SavedScan
+{
+    public DateTimeOffset ScannedAt { get; set; }
+    public string Proto { get; set; } = "";
+    public string BestEndpoint { get; set; } = "";
+    public List<SavedEndpoint> Endpoints { get; set; } = [];
+}
+
+public sealed class SavedEndpoint
+{
+    public string Endpoint { get; set; } = "";
+    public string Node { get; set; } = "";
+    public string Country { get; set; } = "";
+    public string City { get; set; } = "";
+    public string Location { get; set; } = "";
+    public double PingMs { get; set; }
+    public double TunPingMs { get; set; }
+    public double Loss { get; set; }
+    public double SpeedMbps { get; set; }
+}
+
 public sealed class MasqueAccount
 {
     [JsonPropertyName("id")] public string ID { get; set; } = "";
