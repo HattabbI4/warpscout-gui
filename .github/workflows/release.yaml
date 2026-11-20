@@ -1,0 +1,103 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: standalone
+            self_contained: "true"
+            extra_props: "-p:IncludeNativeLibrariesForSelfExtract=true"
+          - variant: lite
+            self_contained: "false"
+            extra_props: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build (${{ matrix.variant }})
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION_NUM=$(echo "$VERSION" | sed -E 's/^[vV]//; s/[^0-9.].*$//')
+          [ -z "$VERSION_NUM" ] && VERSION_NUM="0.1.0"
+          ASSET="warpscout-gui_${VERSION}_windows_amd64_${{ matrix.variant }}.exe"
+          dotnet publish -c Release -r win-x64 \
+            --self-contained ${{ matrix.self_contained }} \
+            -p:PublishSingleFile=true \
+            -p:Version="$VERSION_NUM" \
+            -p:DebugType=none \
+            -p:DebugSymbols=false \
+            ${{ matrix.extra_props }} \
+            -o out
+          mv out/warpscout-gui.exe "$ASSET"
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          VERSION="${GITHUB_REF_NAME#v}"
+          DL_BASE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          STANDALONE="warpscout-gui_${VERSION}_windows_amd64_standalone.exe"
+          LITE="warpscout-gui_${VERSION}_windows_amd64_lite.exe"
+
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          RANGE="${PREV:+$PREV..}${GITHUB_REF_NAME}"
+          NOTE=$(git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME")
+          {
+            [ -n "$NOTE" ] && printf '%s\n\n' "$NOTE"
+            echo "## Скачать"
+            echo
+            echo "- 📦 **[${STANDALONE}](${DL_BASE}/${STANDALONE})** — **автономная версия (со встроенными библиотеками .NET 8)**. Работает сразу на любой Windows 10/11 (x64) без установки дополнительного ПО (~71 МБ)."
+            echo "- ⚡ **[${LITE}](${DL_BASE}/${LITE})** — **облегчённая версия (без встроенных библиотек)**. Требует установленного в системе [.NET 8 Desktop Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) (~6 МБ)."
+            echo
+            echo "## Commits"
+            echo
+            git -P log --no-merges \
+              -E --invert-grep --grep='^docs(\(.*\))?:' \
+              --pretty="- %s ([\`%h\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/%H))" \
+              "$RANGE"
+            echo
+            gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="${GITHUB_REF_NAME}" ${PREV:+-f previous_tag_name="$PREV"} \
+              --jq .body | awk '/^## New Contributors/{f=1} f || /^\*\*Full Changelog\*\*/'
+          } > body.md
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: body.md

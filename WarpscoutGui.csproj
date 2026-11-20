@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>warpscout-gui</AssemblyName>
+    <RootNamespace>WarpscoutGui</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <Authors>HattabbI4</Authors>
+    <Product>Warpscout GUI</Product>
+    <Description>Нативный клиент Windows 10/11 (Fluent 2) для сканера Cloudflare WARP warpscout</Description>
+    <Copyright>Copyright (c) 2026 HattabbI4</Copyright>
+    <RepositoryUrl>https://github.com/HattabbI4/warpscout-gui</RepositoryUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\app.png" />
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="3.0.5" />
+  </ItemGroup>
+</Project>

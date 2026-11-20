@@ -1,0 +1,19 @@
+# .NET build artifacts
+bin/
+obj/
+publish/
+*.user
+*.suo
+
+# Runtime / downloaded binaries & account files
+warpscout-gui.exe
+warpscout.exe
+warpscout-account.json
+settings.json
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
