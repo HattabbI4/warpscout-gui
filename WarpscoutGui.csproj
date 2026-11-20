@@ -24,4 +24,13 @@
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="3.0.5" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="WarpscoutGui.Tests\**" />
+    <EmbeddedResource Remove="WarpscoutGui.Tests\**" />
+    <None Remove="WarpscoutGui.Tests\**" />
+    <Page Remove="WarpscoutGui.Tests\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WarpscoutGui.Tests" />
+  </ItemGroup>
 </Project>

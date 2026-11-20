@@ -341,7 +341,7 @@ public static class CoreService
         return sb.ToString();
     }
 
-    private static string ExtractHost(string endpoint)
+    internal static string ExtractHost(string endpoint)
     {
         if (endpoint.StartsWith('['))
         {

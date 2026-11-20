@@ -521,7 +521,7 @@ public partial class MainWindow : FluentWindow
     private void TxtCustomFlags_LostFocus(object sender, RoutedEventArgs e) =>
         CoreService.SaveSettings(_settings);
 
-    private static List<string> ParseExcludedNodes(string? raw)
+    internal static List<string> ParseExcludedNodes(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return [];
         return raw.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -1194,7 +1194,7 @@ public partial class MainWindow : FluentWindow
         _trayIconHandle = null;
     }
 
-    private static List<string> SplitCliArgs(string? input)
+    internal static List<string> SplitCliArgs(string? input)
     {
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(input)) return result;

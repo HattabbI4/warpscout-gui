@@ -1,0 +1,498 @@
+using System.Globalization;
+using System.IO;
+using System.Text.Json;
+using System.Windows.Media;
+using Xunit;
+
+namespace WarpscoutGui.Tests;
+
+public sealed class WarpscoutTests : IDisposable
+{
+    private readonly string _tempDir;
+
+    public WarpscoutTests()
+    {
+        _tempDir = Path.Combine(Path.GetTempPath(), $"warpscout-gui-tests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempDir);
+        Strings.Instance.SetLanguage("ru");
+    }
+
+    public void Dispose()
+    {
+        Strings.Instance.SetLanguage("ru");
+        try
+        {
+            if (Directory.Exists(_tempDir))
+                Directory.Delete(_tempDir, recursive: true);
+        }
+        catch
+        {
+        }
+    }
+
+    private string WriteTempFile(string name, string content)
+    {
+        var path = Path.Combine(_tempDir, name);
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    private string WriteValidAccount(bool includeMasque = true, string ipv4 = "172.16.0.5")
+    {
+        var acc = new AccountData
+        {
+            ID = "acc-123",
+            Token = "tok-xyz",
+            PrivateKey = "priv-key-wg",
+            PeerPublicKey = "peer-pub-wg",
+            IPv4 = ipv4,
+            IPv6 = "2606:4700:110::2",
+            Masque = includeMasque
+                ? new MasqueAccount
+                {
+                    ID = "masque-id",
+                    Token = "masque-tok",
+                    PrivateKey = "masque-priv",
+                    PeerPublicKey = "masque-pub",
+                    IPv4 = "172.16.0.10",
+                    IPv6 = "2606:4700:110::10",
+                }
+                : null,
+        };
+        return WriteTempFile($"account-{Guid.NewGuid():N}.json", JsonSerializer.Serialize(acc));
+    }
+
+    // --- CoreService tests ---
+
+    [Theory]
+    [InlineData("162.159.192.1:2408", "162.159.192.1")]
+    [InlineData("162.159.192.1", "162.159.192.1")]
+    [InlineData("[2606:4700:d0::1]:2408", "2606:4700:d0::1")]
+    [InlineData("2606:4700:d0::1", "2606:4700:d0::1")]
+    public void ExtractHost_HandlesIpv4AndIpv6Endpoints(string endpoint, string expectedHost)
+    {
+        Assert.Equal(expectedHost, CoreService.ExtractHost(endpoint));
+    }
+
+    [Fact]
+    public void ReadAccount_ReturnsNull_ForMissingMalformedOrIncompleteFiles()
+    {
+        var missingPath = Path.Combine(_tempDir, "does-not-exist.json");
+        Assert.Null(CoreService.ReadAccount(missingPath));
+
+        var malformedPath = WriteTempFile("malformed.json", "{not valid json");
+        Assert.Null(CoreService.ReadAccount(malformedPath));
+
+        var missingPrivKey = WriteTempFile("no-priv.json", """{"peer_public_key":"pub"}""");
+        Assert.Null(CoreService.ReadAccount(missingPrivKey));
+
+        var missingPeerKey = WriteTempFile("no-peer.json", """{"private_key":"priv"}""");
+        Assert.Null(CoreService.ReadAccount(missingPeerKey));
+    }
+
+    [Fact]
+    public void ReadAccount_ReturnsPopulatedAccount_WhenValid()
+    {
+        var accPath = WriteValidAccount(includeMasque: true);
+        var acc = CoreService.ReadAccount(accPath);
+
+        Assert.NotNull(acc);
+        Assert.Equal("acc-123", acc.ID);
+        Assert.Equal("priv-key-wg", acc.PrivateKey);
+        Assert.Equal("peer-pub-wg", acc.PeerPublicKey);
+        Assert.Equal("172.16.0.5", acc.IPv4);
+        Assert.NotNull(acc.Masque);
+        Assert.Equal("masque-id", acc.Masque.ID);
+        Assert.Equal("masque-priv", acc.Masque.PrivateKey);
+        Assert.Equal("masque-pub", acc.Masque.PeerPublicKey);
+    }
+
+    [Fact]
+    public void ExportConfig_ThrowsWhenAccountMissing()
+    {
+        var missingPath = Path.Combine(_tempDir, "missing-acc.json");
+        Assert.Throws<InvalidOperationException>(() =>
+            CoreService.ExportConfig(missingPath, "162.159.192.1:2408", "wg"));
+    }
+
+    [Fact]
+    public void ExportConfig_WireGuard_UsesFallbackIpv4AndOmitsAwgParams()
+    {
+        var accPath = WriteValidAccount(includeMasque: false, ipv4: "");
+        var conf = CoreService.ExportConfig(accPath, "162.159.192.1:2408", "wg");
+
+        Assert.Contains("[Interface]", conf);
+        Assert.Contains("Address = 172.16.0.2/32", conf);
+        Assert.Contains("PrivateKey = priv-key-wg", conf);
+        Assert.Contains("DNS = 1.1.1.1, 1.0.0.1", conf);
+        Assert.Contains("[Peer]", conf);
+        Assert.Contains("PublicKey = peer-pub-wg", conf);
+        Assert.Contains("Endpoint = 162.159.192.1:2408", conf);
+        Assert.Contains("AllowedIPs = 0.0.0.0/0", conf);
+        Assert.Contains("PersistentKeepalive = 25", conf);
+        Assert.DoesNotContain("Jc =", conf);
+        Assert.DoesNotContain("Jmin =", conf);
+        Assert.DoesNotContain("Jmax =", conf);
+        Assert.DoesNotContain("I1 =", conf);
+    }
+
+    [Fact]
+    public void ExportConfig_AmneziaWg_IncludesAwgObfuscationParams()
+    {
+        var accPath = WriteValidAccount(includeMasque: false, ipv4: "172.16.0.9");
+        var conf = CoreService.ExportConfig(accPath, "162.159.192.2:2408", "awg");
+
+        Assert.Contains("Address = 172.16.0.9/32", conf);
+        Assert.Contains("Jc = 6", conf);
+        Assert.Contains("Jmin = 10", conf);
+        Assert.Contains("Jmax = 50", conf);
+        Assert.Contains("I1 = <r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>", conf);
+    }
+
+    [Fact]
+    public void ExportConfig_Masque_ThrowsWhenMasqueMissing()
+    {
+        var accPath = WriteValidAccount(includeMasque: false);
+        Assert.Throws<InvalidOperationException>(() =>
+            CoreService.ExportConfig(accPath, "162.159.198.1:443", "masque"));
+    }
+
+    [Fact]
+    public void ExportConfig_Masque_MapsIpv4AndIpv6EndpointsCorrectly()
+    {
+        var accPath = WriteValidAccount(includeMasque: true);
+
+        var jsonV4 = CoreService.ExportConfig(accPath, "162.159.192.5:2408", "masque");
+        using (var doc = JsonDocument.Parse(jsonV4))
+        {
+            var root = doc.RootElement;
+            Assert.Equal("masque-priv", root.GetProperty("private_key").GetString());
+            Assert.Equal("162.159.192.5", root.GetProperty("endpoint_v4").GetString());
+            Assert.Equal("2606:4700:103::2", root.GetProperty("endpoint_v6").GetString());
+            Assert.Equal("masque-pub", root.GetProperty("endpoint_pub_key").GetString());
+            Assert.Equal("masque-id", root.GetProperty("id").GetString());
+            Assert.Equal("masque-tok", root.GetProperty("access_token").GetString());
+            Assert.False(root.TryGetProperty("endpoint_h2_v4", out _));
+        }
+
+        var jsonV6 = CoreService.ExportConfig(accPath, "[2606:4700:d0::1]:2408", "masque");
+        using (var doc = JsonDocument.Parse(jsonV6))
+        {
+            var root = doc.RootElement;
+            Assert.Equal("162.159.198.2", root.GetProperty("endpoint_v4").GetString());
+            Assert.Equal("2606:4700:d0::1", root.GetProperty("endpoint_v6").GetString());
+        }
+    }
+
+    [Fact]
+    public void ExportConfig_MasqueH2_KeepsDefaultEndpointsAndSetsH2Field()
+    {
+        var accPath = WriteValidAccount(includeMasque: true);
+
+        var jsonV4 = CoreService.ExportConfig(accPath, "162.159.192.5:443", "masque-h2");
+        using (var doc = JsonDocument.Parse(jsonV4))
+        {
+            var root = doc.RootElement;
+            Assert.Equal("162.159.198.2", root.GetProperty("endpoint_v4").GetString());
+            Assert.Equal("2606:4700:103::2", root.GetProperty("endpoint_v6").GetString());
+            Assert.Equal("162.159.192.5", root.GetProperty("endpoint_h2_v4").GetString());
+            Assert.False(root.TryGetProperty("endpoint_h2_v6", out _));
+        }
+
+        var jsonV6 = CoreService.ExportConfig(accPath, "[2606:4700:d0::9]:443", "masque-h2");
+        using (var doc = JsonDocument.Parse(jsonV6))
+        {
+            var root = doc.RootElement;
+            Assert.Equal("162.159.198.2", root.GetProperty("endpoint_v4").GetString());
+            Assert.Equal("2606:4700:103::2", root.GetProperty("endpoint_v6").GetString());
+            Assert.Equal("2606:4700:d0::9", root.GetProperty("endpoint_h2_v6").GetString());
+            Assert.False(root.TryGetProperty("endpoint_h2_v4", out _));
+        }
+    }
+
+    [Fact]
+    public void ResolveCorePath_ReturnsExplicitExistingPath_AndIgnoresMissingPath()
+    {
+        var fakeExe = WriteTempFile("warpscout-custom.exe", "stub");
+        var settingsWithExisting = new AppSettings { CorePath = fakeExe };
+
+        Assert.Equal(Path.GetFullPath(fakeExe), CoreService.ResolveCorePath(settingsWithExisting));
+
+        var missingExe = Path.Combine(_tempDir, "non-existent-warpscout.exe");
+        var resolved = CoreService.ResolveCorePath(new AppSettings { CorePath = missingExe });
+        Assert.NotEqual(Path.GetFullPath(missingExe), resolved);
+    }
+
+    [Fact]
+    public async Task MissingCoreBinary_GetCoreVersionReturnsEmpty_AndRegisterThrows()
+    {
+        var missingExe = Path.Combine(_tempDir, "missing-core.exe");
+        var accPath = Path.Combine(_tempDir, "out-account.json");
+
+        Assert.Equal("", await CoreService.GetCoreVersionAsync(""));
+        Assert.Equal("", await CoreService.GetCoreVersionAsync(missingExe));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CoreService.RegisterAccountAsync("", accPath, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CoreService.RegisterAccountAsync(missingExe, accPath, CancellationToken.None));
+    }
+
+    // --- Models tests ---
+
+    [Fact]
+    public void AppSettings_DefaultsAndJsonRoundTrip()
+    {
+        var defaults = new AppSettings();
+        Assert.Equal("", defaults.CorePath);
+        Assert.Equal("ru", defaults.Language);
+        Assert.True(defaults.ExcludeNodeEnabled);
+        Assert.Equal("DME", defaults.ExcludedNode);
+        Assert.True(defaults.MinimizeToTray);
+        Assert.True(defaults.WarnOnCloseWithProxy);
+        Assert.Equal("", defaults.DefaultExitAction);
+        Assert.Equal("-p awg -P -exclude-node DME", defaults.CustomScanFlags);
+
+        var custom = new AppSettings
+        {
+            CorePath = @"C:\tools\warpscout.exe",
+            Language = "en",
+            ExcludeNodeEnabled = false,
+            ExcludedNode = "FRA,AMS",
+            MinimizeToTray = false,
+            WarnOnCloseWithProxy = false,
+            DefaultExitAction = "exit",
+            CustomScanFlags = "-p masque -P",
+        };
+        var roundTripped = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(custom));
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(custom.CorePath, roundTripped.CorePath);
+        Assert.Equal(custom.Language, roundTripped.Language);
+        Assert.Equal(custom.ExcludeNodeEnabled, roundTripped.ExcludeNodeEnabled);
+        Assert.Equal(custom.ExcludedNode, roundTripped.ExcludedNode);
+        Assert.Equal(custom.MinimizeToTray, roundTripped.MinimizeToTray);
+        Assert.Equal(custom.WarnOnCloseWithProxy, roundTripped.WarnOnCloseWithProxy);
+        Assert.Equal(custom.DefaultExitAction, roundTripped.DefaultExitAction);
+        Assert.Equal(custom.CustomScanFlags, roundTripped.CustomScanFlags);
+    }
+
+    [Fact]
+    public void ScanStreamEvent_DeserializesNdjsonPayloads()
+    {
+        var progress = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"progress","phase":"scan","done":10,"total":100}""");
+        Assert.NotNull(progress);
+        Assert.Equal("progress", progress.Event);
+        Assert.Equal("scan", progress.Phase);
+        Assert.Equal(10, progress.Done);
+        Assert.Equal(100, progress.Total);
+
+        var ep = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"endpoint","endpoint":"162.159.192.1:2408","node":"FRA","country":"DE","city":"Frankfurt","location":"Frankfurt, DE","ping_ms":42.5,"tun_ping_ms":55.1,"loss":0.5,"speed_mbps":123.4}""");
+        Assert.NotNull(ep);
+        Assert.Equal("endpoint", ep.Event);
+        Assert.Equal("162.159.192.1:2408", ep.Endpoint);
+        Assert.Equal("FRA", ep.Node);
+        Assert.Equal("DE", ep.Country);
+        Assert.Equal("Frankfurt", ep.City);
+        Assert.Equal("Frankfurt, DE", ep.Location);
+        Assert.Equal(42.5, ep.PingMs);
+        Assert.Equal(55.1, ep.TunPingMs);
+        Assert.Equal(0.5, ep.Loss);
+        Assert.Equal(123.4, ep.SpeedMbps);
+
+        var done = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"done","best":"162.159.192.1:2408","working":[{"endpoint":"162.159.192.1:2408","node":"FRA","ping_ms":40}]}""");
+        Assert.NotNull(done);
+        Assert.Equal("done", done.Event);
+        Assert.Equal("162.159.192.1:2408", done.Best);
+        Assert.NotNull(done.Working);
+        Assert.Single(done.Working);
+        Assert.Equal("FRA", done.Working[0].Node);
+
+        var err = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"error","error":"network unreachable"}""");
+        Assert.NotNull(err);
+        Assert.Equal("error", err.Event);
+        Assert.Equal("network unreachable", err.Error);
+    }
+
+    [Fact]
+    public void EndpointItem_ComputedPropertiesAndFallbacks()
+    {
+        var prevCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        try
+        {
+            Strings.Instance.SetLanguage("en");
+            var empty = new EndpointItem();
+            Assert.Equal(9999, empty.EffectivePingMs);
+            Assert.Equal("CF", empty.CountryBadge);
+            Assert.Equal("Cloudflare", empty.DisplayLocation);
+            Assert.Equal("—", empty.DisplayNode);
+            Assert.Equal("—", empty.DisplayPing);
+            Assert.Equal("0%", empty.DisplayLoss);
+            Assert.Equal("—", empty.DisplaySpeed);
+            Assert.Equal(Strings.Instance.RowProxyStart, empty.ProxyButtonText);
+
+            var withLocation = new EndpointItem
+            {
+                Endpoint = "162.159.192.1:2408",
+                Country = "NL",
+                Location = "Amsterdam, NL",
+                Node = "AMS",
+                PingMs = 64.4,
+                Loss = 2.6,
+                SpeedMbps = 85.24,
+                IsProxied = true,
+            };
+            Assert.Equal(64.4, withLocation.EffectivePingMs);
+            Assert.Equal("NL", withLocation.CountryBadge);
+            Assert.Equal("Amsterdam, NL", withLocation.DisplayLocation);
+            Assert.Equal("AMS", withLocation.DisplayNode);
+            Assert.Equal("64 ms", withLocation.DisplayPing);
+            Assert.Equal("3%", withLocation.DisplayLoss);
+            Assert.Equal("85.2 Mbps", withLocation.DisplaySpeed);
+            Assert.Equal(Strings.Instance.RowProxyActive, withLocation.ProxyButtonText);
+
+            withLocation.City = "Schiphol";
+            withLocation.TunPingMs = 71.8;
+            Assert.Equal(71.8, withLocation.EffectivePingMs);
+            Assert.Equal("Schiphol", withLocation.DisplayLocation);
+            Assert.Equal("72 ms", withLocation.DisplayPing);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = prevCulture;
+        }
+    }
+
+    [Theory]
+    [InlineData(50, 0, 52, 211, 153)]
+    [InlineData(79.9, 0, 52, 211, 153)]
+    [InlineData(80, 0, 251, 191, 36)]
+    [InlineData(149.9, 0, 251, 191, 36)]
+    [InlineData(150, 0, 248, 113, 113)]
+    [InlineData(40, 120, 251, 191, 36)]
+    [InlineData(0, 0, 248, 113, 113)]
+    public void EndpointItem_PingBrushMatchesLatencyThresholds(
+        double pingMs, double tunPingMs, byte r, byte g, byte b)
+    {
+        var item = new EndpointItem { PingMs = pingMs, TunPingMs = tunPingMs };
+        var brush = Assert.IsType<SolidColorBrush>(item.PingBrush);
+        Assert.Equal(System.Windows.Media.Color.FromRgb(r, g, b), brush.Color);
+    }
+
+    [Fact]
+    public void EndpointItem_RaisesPropertyChangedOnUpdatesAndRefreshLocale()
+    {
+        var item = new EndpointItem();
+        var changed = new List<string?>();
+        item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        item.PingMs = 45;
+        Assert.Contains(nameof(EndpointItem.DisplayPing), changed);
+        Assert.Contains(nameof(EndpointItem.PingBrush), changed);
+
+        changed.Clear();
+        item.TunPingMs = 60;
+        Assert.Contains(nameof(EndpointItem.DisplayPing), changed);
+        Assert.Contains(nameof(EndpointItem.PingBrush), changed);
+
+        changed.Clear();
+        item.Loss = 1;
+        Assert.Equal([nameof(EndpointItem.DisplayLoss)], changed);
+
+        changed.Clear();
+        item.SpeedMbps = 10;
+        Assert.Equal([nameof(EndpointItem.DisplaySpeed)], changed);
+
+        changed.Clear();
+        item.IsBest = true;
+        Assert.Equal([nameof(EndpointItem.IsBest)], changed);
+
+        changed.Clear();
+        item.IsProxied = true;
+        Assert.Contains(nameof(EndpointItem.IsProxied), changed);
+        Assert.Contains(nameof(EndpointItem.ProxyButtonText), changed);
+
+        changed.Clear();
+        item.RefreshLocale();
+        Assert.Equal(
+            [nameof(EndpointItem.DisplayPing), nameof(EndpointItem.DisplaySpeed), nameof(EndpointItem.ProxyButtonText)],
+            changed);
+    }
+
+    // --- Strings tests ---
+
+    [Fact]
+    public void Strings_SetLanguageSwitchesLocaleAndRaisesPropertyChangedOnlyOnChange()
+    {
+        var s = Strings.Instance;
+        s.SetLanguage("ru");
+
+        var events = new List<string?>();
+        void Handler(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => events.Add(e.PropertyName);
+        s.PropertyChanged += Handler;
+        try
+        {
+            s.SetLanguage("ru");
+            Assert.Empty(events);
+
+            s.SetLanguage("en");
+            Assert.Single(events);
+            Assert.Equal(string.Empty, events[0]);
+            Assert.True(s.IsEnglish);
+            Assert.Equal("Scanner", s.NavScanner);
+            Assert.Equal("ms", s.UnitMs);
+            Assert.Equal("Mbps", s.UnitMbps);
+            Assert.Equal("🟢 Active", s.RowProxyActive);
+            Assert.Equal("v1.0 · Ready", s.StatusPillReady("v1.0"));
+            Assert.Equal("★ Best server: DE Frankfurt (FRA)", s.BestServerTitle("DE", "Frankfurt", "FRA"));
+
+            s.SetLanguage("EN");
+            Assert.Single(events);
+
+            s.SetLanguage("ru");
+            Assert.Equal(2, events.Count);
+            Assert.False(s.IsEnglish);
+            Assert.Equal("Сканер", s.NavScanner);
+            Assert.Equal("мс", s.UnitMs);
+            Assert.Equal("Мбит/с", s.UnitMbps);
+            Assert.Equal("🟢 Активен", s.RowProxyActive);
+            Assert.Equal("v1.0 · Готов", s.StatusPillReady("v1.0"));
+        }
+        finally
+        {
+            s.PropertyChanged -= Handler;
+        }
+    }
+
+    // --- MainWindow CLI & filter parsing tests ---
+
+    [Fact]
+    public void ParseExcludedNodes_SplitsNormalizesAndDeduplicates()
+    {
+        Assert.Equal(["DME", "FRA", "AMS"], MainWindow.ParseExcludedNodes("dme, fra; ams DME"));
+        Assert.Empty(MainWindow.ParseExcludedNodes(null));
+        Assert.Empty(MainWindow.ParseExcludedNodes(""));
+        Assert.Empty(MainWindow.ParseExcludedNodes(" , ;  "));
+    }
+
+    [Fact]
+    public void SplitCliArgs_HandlesFlagsQuotesAndWhitespace()
+    {
+        Assert.Equal(
+            ["-p", "awg", "-P", "-exclude-node", "DME"],
+            MainWindow.SplitCliArgs("-p awg -P -exclude-node DME"));
+
+        Assert.Equal(
+            ["-a", @"C:\My Folder\acc.json", "-exclude-node", "DME, FRA", "-jt", "20"],
+            MainWindow.SplitCliArgs("""-a "C:\My Folder\acc.json" -exclude-node 'DME, FRA' -jt 20"""));
+
+        Assert.Empty(MainWindow.SplitCliArgs(null));
+        Assert.Empty(MainWindow.SplitCliArgs(""));
+        Assert.Empty(MainWindow.SplitCliArgs("   \t  "));
+    }
+}

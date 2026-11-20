@@ -28,6 +28,9 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Run tests
+        run: dotnet test WarpscoutGui.Tests/WarpscoutGui.Tests.csproj -c Release
+
       - name: Build (${{ matrix.variant }})
         shell: bash
         run: |
