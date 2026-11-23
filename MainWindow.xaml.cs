@@ -2,12 +2,15 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Wpf.Ui.Controls;
 using Drawing = System.Drawing;
 using WinForms = System.Windows.Forms;
@@ -62,17 +65,27 @@ public partial class MainWindow : FluentWindow
     private bool _isAdvancedScanMode;
     private bool _isExiting;
     private bool _isInitializing = true;
+    private bool _githubCornerPressed;
+    private readonly DispatcherTimer _githubCornerHoverTimer;
 
     private WinForms.NotifyIcon? _trayIcon;
     private Drawing.Icon? _trayIconHandle;
     private WinForms.ToolStripMenuItem? _trayShowItem;
     private WinForms.ToolStripMenuItem? _trayStopProxyItem;
+    private WinForms.ToolStripMenuItem? _trayMinimizeToTrayItem;
     private WinForms.ToolStripMenuItem? _trayExitItem;
 
     public MainWindow()
     {
         InitializeComponent();
         UpdateGithubCornerVisuals(0.0);
+        _githubCornerHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+        _githubCornerHoverTimer.Tick += (_, _) =>
+        {
+            _githubCornerHoverTimer.Stop();
+            if (GithubCornerHost.IsMouseOver)
+                AnimateGithubCorner(true);
+        };
         _settings = CoreService.LoadSettings();
 
         GridEndpoints.ItemsSource = _endpoints;
@@ -98,6 +111,7 @@ public partial class MainWindow : FluentWindow
         ChkDme.IsChecked = _settings.ExcludeNodeEnabled;
         TxtExcludeNode.Text = _settings.ExcludedNode;
         TglMinimizeToTray.IsChecked = _settings.MinimizeToTray;
+        TglMinimizeToTrayWithProxy.IsChecked = _settings.MinimizeToTrayWithProxy;
         TglWarnOnExit.IsChecked = _settings.WarnOnCloseWithProxy;
     }
 
@@ -188,9 +202,17 @@ public partial class MainWindow : FluentWindow
         var menu = new WinForms.ContextMenuStrip();
         _trayShowItem = new WinForms.ToolStripMenuItem(s.TrayShow, null, (_, _) => Dispatcher.Invoke(RestoreFromTray));
         _trayStopProxyItem = new WinForms.ToolStripMenuItem(s.TrayStopProxy, null, (_, _) => Dispatcher.Invoke(StopSocksProcess));
+        _trayMinimizeToTrayItem = new WinForms.ToolStripMenuItem(s.TrayMinimizeOption)
+        {
+            CheckOnClick = true,
+            Checked = _settings.MinimizeToTray,
+        };
+        _trayMinimizeToTrayItem.Click += (_, _) => Dispatcher.Invoke(OnTrayMinimizeOptionClicked);
         _trayExitItem = new WinForms.ToolStripMenuItem(s.TrayExit, null, (_, _) => Dispatcher.Invoke(ForceShutdown));
         menu.Items.Add(_trayShowItem);
         menu.Items.Add(_trayStopProxyItem);
+        menu.Items.Add(new WinForms.ToolStripSeparator());
+        menu.Items.Add(_trayMinimizeToTrayItem);
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add(_trayExitItem);
 
@@ -202,6 +224,33 @@ public partial class MainWindow : FluentWindow
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(RestoreFromTray);
+        _trayIcon.BalloonTipClicked += (_, _) => Dispatcher.Invoke(RestoreFromTray);
+    }
+
+    private void OnTrayMinimizeOptionClicked()
+    {
+        if (_trayMinimizeToTrayItem == null) return;
+        _settings.MinimizeToTray = _trayMinimizeToTrayItem.Checked;
+        _settings.DefaultExitAction = "";
+        SyncTraySettingsUI();
+        CoreService.SaveSettings(_settings);
+    }
+
+    private void SyncTraySettingsUI()
+    {
+        _isInitializing = true;
+        try
+        {
+            TglMinimizeToTray.IsChecked = _settings.MinimizeToTray;
+            TglMinimizeToTrayWithProxy.IsChecked = _settings.MinimizeToTrayWithProxy;
+            TglWarnOnExit.IsChecked = _settings.WarnOnCloseWithProxy;
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
+        if (_trayMinimizeToTrayItem != null)
+            _trayMinimizeToTrayItem.Checked = _settings.MinimizeToTray;
     }
 
     private static Drawing.Icon LoadAppTrayIcon()
@@ -301,18 +350,33 @@ public partial class MainWindow : FluentWindow
     private void BtnGoToServers_Click(object sender, RoutedEventArgs e) => SelectPage("servers");
     private void BtnGoToScanner_Click(object sender, RoutedEventArgs e) => SelectPage(_isAdvancedScanMode ? "advanced" : "scanner");
 
-    private void GithubCorner_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
-        AnimateGithubCorner(true);
+    private void GithubCorner_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _githubCornerHoverTimer.Stop();
+        _githubCornerHoverTimer.Start();
+    }
 
-    private void GithubCorner_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) =>
+    private void GithubCorner_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _githubCornerHoverTimer.Stop();
+        _githubCornerPressed = false;
         AnimateGithubCorner(false);
+    }
+
+    private void GithubCorner_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _githubCornerPressed = true;
+        e.Handled = true;
+    }
 
     private void GithubCorner_Click(object sender, MouseButtonEventArgs e)
     {
+        if (!_githubCornerPressed) return;
+        _githubCornerPressed = false;
         e.Handled = true;
         try
         {
-            Process.Start(new ProcessStartInfo(GithubRepoUrl) { UseShellExecute = true });
+            using var _ = Process.Start(new ProcessStartInfo(GithubRepoUrl) { UseShellExecute = true });
         }
         catch { }
     }
@@ -628,9 +692,11 @@ public partial class MainWindow : FluentWindow
     {
         if (_isInitializing) return;
         _settings.MinimizeToTray = TglMinimizeToTray.IsChecked == true;
+        _settings.MinimizeToTrayWithProxy = TglMinimizeToTrayWithProxy.IsChecked == true;
         _settings.WarnOnCloseWithProxy = TglWarnOnExit.IsChecked == true;
-        if (_settings.WarnOnCloseWithProxy)
-            _settings.DefaultExitAction = "";
+        _settings.DefaultExitAction = "";
+        if (_trayMinimizeToTrayItem != null)
+            _trayMinimizeToTrayItem.Checked = _settings.MinimizeToTray;
         CoreService.SaveSettings(_settings);
     }
 
@@ -651,6 +717,7 @@ public partial class MainWindow : FluentWindow
         var s = Strings.Instance;
         if (_trayShowItem != null) _trayShowItem.Text = s.TrayShow;
         if (_trayStopProxyItem != null) _trayStopProxyItem.Text = s.TrayStopProxy;
+        if (_trayMinimizeToTrayItem != null) _trayMinimizeToTrayItem.Text = s.TrayMinimizeOption;
         if (_trayExitItem != null) _trayExitItem.Text = s.TrayExit;
         if (_trayIcon != null) _trayIcon.Text = s.TrayTooltip;
 
@@ -1329,6 +1396,98 @@ public partial class MainWindow : FluentWindow
             BtnBestProxy.Content = best.IsProxied ? s.BtnProxyStop : s.BtnProxyStart;
     }
 
+    internal static CloseAction ResolveCloseAction(AppSettings settings, bool proxyActive)
+    {
+        if (proxyActive)
+        {
+            if (settings.WarnOnCloseWithProxy)
+                return CloseAction.Prompt;
+            if (settings.MinimizeToTray || settings.MinimizeToTrayWithProxy)
+                return CloseAction.MinimizeToTray;
+            return CloseAction.Exit;
+        }
+
+        return settings.MinimizeToTray ? CloseAction.MinimizeToTray : CloseAction.Exit;
+    }
+
+    private void MinimizeToTrayWithNotice(bool proxyActive)
+    {
+        Hide();
+        if (_trayIcon == null) return;
+        var s = Strings.Instance;
+        var body = proxyActive ? s.TrayMinimizedProxyBody : s.TrayMinimizedBody;
+        try
+        {
+            if (TryShowSilentBalloonTip(_trayIcon, s.TrayMinimizedTitle, body, 4000))
+                return;
+
+            _trayIcon.BalloonTipTitle = s.TrayMinimizedTitle;
+            _trayIcon.BalloonTipText = body;
+            _trayIcon.BalloonTipIcon = WinForms.ToolTipIcon.Info;
+            _trayIcon.ShowBalloonTip(4000);
+        }
+        catch { }
+    }
+
+    private const uint NimModify = 0x00000001;
+    private const uint NifInfo = 0x00000010;
+    private const uint NiifInfo = 0x00000001;
+    private const uint NiifNoSound = 0x00000010;
+
+    internal static int NotifyIconDataSize => Marshal.SizeOf<NotifyIconData>();
+
+    [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool Shell_NotifyIcon(uint dwMessage, ref NotifyIconData lpData);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NotifyIconData
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uID;
+        public uint uFlags;
+        public uint uCallbackMessage;
+        public IntPtr hIcon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string szTip;
+        public uint dwState;
+        public uint dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string szInfo;
+        public uint uTimeoutOrVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string szInfoTitle;
+        public uint dwInfoFlags;
+        public Guid guidItem;
+        public IntPtr hBalloonIcon;
+    }
+
+    private static bool TryShowSilentBalloonTip(WinForms.NotifyIcon trayIcon, string title, string text, uint timeoutMs = 4000)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var type = typeof(WinForms.NotifyIcon);
+        var windowObj = (type.GetField("_window", flags) ?? type.GetField("window", flags))?.GetValue(trayIcon);
+        var idObj = (type.GetField("_id", flags) ?? type.GetField("id", flags))?.GetValue(trayIcon);
+        if (windowObj is not WinForms.NativeWindow nativeWindow || nativeWindow.Handle == IntPtr.Zero || idObj == null)
+            return false;
+
+        var safeTitle = title ?? "";
+        var safeText = text ?? "";
+        var nid = new NotifyIconData
+        {
+            cbSize = NotifyIconDataSize,
+            hWnd = nativeWindow.Handle,
+            uID = Convert.ToUInt32(idObj),
+            uFlags = NifInfo,
+            szTip = "",
+            szInfoTitle = safeTitle.Length > 63 ? safeTitle[..63] : safeTitle,
+            szInfo = safeText.Length > 255 ? safeText[..255] : safeText,
+            uTimeoutOrVersion = timeoutMs,
+            dwInfoFlags = NiifInfo | NiifNoSound,
+        };
+        return Shell_NotifyIcon(NimModify, ref nid);
+    }
+
     protected override void OnClosing(CancelEventArgs e)
     {
         if (_isExiting)
@@ -1339,27 +1498,18 @@ public partial class MainWindow : FluentWindow
         }
 
         bool proxyActive = _socksProcess != null && !_socksProcess.HasExited;
-        if (proxyActive)
+        switch (ResolveCloseAction(_settings, proxyActive))
         {
-            if (_settings.WarnOnCloseWithProxy)
-            {
+            case CloseAction.Prompt:
                 e.Cancel = true;
                 ChkRememberExitChoice.IsChecked = false;
                 ExitWarningOverlay.Visibility = Visibility.Visible;
                 return;
-            }
-            if (_settings.MinimizeToTray || _settings.DefaultExitAction == "minimize")
-            {
+
+            case CloseAction.MinimizeToTray:
                 e.Cancel = true;
-                Hide();
+                MinimizeToTrayWithNotice(proxyActive);
                 return;
-            }
-        }
-        else if (_settings.MinimizeToTray)
-        {
-            e.Cancel = true;
-            Hide();
-            return;
         }
 
         CleanupAll();
@@ -1374,14 +1524,13 @@ public partial class MainWindow : FluentWindow
         if (ChkRememberExitChoice.IsChecked == true)
         {
             _settings.WarnOnCloseWithProxy = false;
-            _settings.MinimizeToTray = true;
+            _settings.MinimizeToTrayWithProxy = true;
             _settings.DefaultExitAction = "minimize";
-            TglMinimizeToTray.IsChecked = true;
-            TglWarnOnExit.IsChecked = false;
+            SyncTraySettingsUI();
             CoreService.SaveSettings(_settings);
         }
         ExitWarningOverlay.Visibility = Visibility.Collapsed;
-        Hide();
+        MinimizeToTrayWithNotice(_socksProcess != null && !_socksProcess.HasExited);
     }
 
     private void BtnExitConfirm_Click(object sender, RoutedEventArgs e)
@@ -1389,8 +1538,10 @@ public partial class MainWindow : FluentWindow
         if (ChkRememberExitChoice.IsChecked == true)
         {
             _settings.WarnOnCloseWithProxy = false;
+            _settings.MinimizeToTrayWithProxy = false;
             _settings.MinimizeToTray = false;
             _settings.DefaultExitAction = "exit";
+            SyncTraySettingsUI();
             CoreService.SaveSettings(_settings);
         }
         ExitWarningOverlay.Visibility = Visibility.Collapsed;
@@ -1406,6 +1557,7 @@ public partial class MainWindow : FluentWindow
 
     private void CleanupAll()
     {
+        _githubCornerHoverTimer.Stop();
         StopScanProcess();
         StopSocksProcess();
         if (_trayIcon != null)

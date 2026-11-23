@@ -34,9 +34,6 @@ public sealed class Strings : INotifyPropertyChanged
 
     // GitHub Star Corner
     public string GithubStarText => T("Спасибо за звезду", "Star on GitHub");
-    public string GithubStarTooltip => T(
-        "Открыть репозиторий на GitHub и поставить звезду",
-        "Open GitHub repository and give it a star");
 
     // Global Banners
     public string CoreDownloadTitle => T("Обновление / скачивание ядра warpscout.exe", "Updating / downloading warpscout.exe core");
@@ -130,7 +127,9 @@ public sealed class Strings : INotifyPropertyChanged
     public string LanguageTitle => T("Язык интерфейса", "Interface language");
     public string LanguageDesc => T("Переключение языка интерфейса приложения (RU / EN)", "Switch application UI language (RU / EN)");
     public string TrayTitle => T("Сворачивать в системный трей", "Minimize to system tray");
-    public string TrayDesc => T("При нажатии на крестик оставлять приложение работать в трее", "Keep the app running in the system tray when closing the window");
+    public string TrayDesc => T("При нажатии на крестик всегда сворачивать приложение в трей вместо выхода", "Always minimize to system tray on close instead of exiting");
+    public string TrayWithProxyTitle => T("Сворачивать в трей при активном SOCKS5", "Minimize to tray when SOCKS5 is active");
+    public string TrayWithProxyDesc => T("При нажатии на крестик не закрывать приложение, пока работает прокси", "Keep the app in the system tray on close while the proxy is running");
     public string WarnExitTitle => T("Предупреждать при выходе с активным SOCKS5", "Warn on exit when SOCKS5 is active");
     public string WarnExitDesc => T("Показывать окно выбора перед завершением, если запущен прокси", "Ask before exiting if the local proxy is currently running");
 
@@ -153,8 +152,16 @@ public sealed class Strings : INotifyPropertyChanged
     // Tray Menu
     public string TrayShow => T("Показать Warpscout", "Show Warpscout");
     public string TrayStopProxy => T("Выключить SOCKS5 прокси", "Stop SOCKS5 proxy");
+    public string TrayMinimizeOption => T("Сворачивать в трей", "Minimize to tray");
     public string TrayExit => T("Выход", "Exit");
     public string TrayTooltip => "Warpscout — Cloudflare WARP";
+    public string TrayMinimizedTitle => T("Warpscout свёрнут в трей", "Warpscout minimized to tray");
+    public string TrayMinimizedProxyBody => T(
+        "Приложение не закрыто и продолжает работать в трее, пока активен SOCKS5-прокси. Отключить это можно в настройках.",
+        "App was minimized to the tray while SOCKS5 proxy is active. You can disable this in Settings.");
+    public string TrayMinimizedBody => T(
+        "Приложение не закрыто и продолжает работать в трее. Отключить это можно в настройках или в меню трея.",
+        "App was minimized to the tray and keeps running. You can disable this in Settings or the tray menu.");
 
     // CoreService Messages
     public string SearchingGithubRelease => T("Поиск последнего релиза на GitHub...", "Checking latest release on GitHub...");

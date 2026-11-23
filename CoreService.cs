@@ -31,27 +31,53 @@ public static class CoreService
 
     public static string SettingsPath => Path.Combine(AppDataDir, "settings.json");
 
-    public static AppSettings LoadSettings()
+    public static AppSettings LoadSettings(string? path = null)
     {
+        var target = string.IsNullOrWhiteSpace(path) ? SettingsPath : path;
         try
         {
-            if (File.Exists(SettingsPath))
+            if (File.Exists(target))
             {
-                var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath));
-                if (s != null) return s;
+                var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(target));
+                if (s != null)
+                {
+                    if (s.SettingsVersion < AppSettings.CurrentSettingsVersion)
+                    {
+                        if (string.Equals(s.DefaultExitAction, "exit", StringComparison.OrdinalIgnoreCase))
+                        {
+                            s.MinimizeToTray = false;
+                            s.MinimizeToTrayWithProxy = false;
+                            s.WarnOnCloseWithProxy = false;
+                        }
+                        else
+                        {
+                            s.MinimizeToTray = false;
+                            s.MinimizeToTrayWithProxy = true;
+                            s.WarnOnCloseWithProxy = false;
+                        }
+                        s.SettingsVersion = AppSettings.CurrentSettingsVersion;
+                        SaveSettings(s, target);
+                    }
+                    return s;
+                }
             }
         }
         catch { }
-        return new AppSettings();
+        return new AppSettings { SettingsVersion = AppSettings.CurrentSettingsVersion };
     }
 
-    public static void SaveSettings(AppSettings s)
+    public static void SaveSettings(AppSettings s, string? path = null)
     {
+        var target = string.IsNullOrWhiteSpace(path) ? SettingsPath : path;
         try
         {
-            Directory.CreateDirectory(AppDataDir);
+            if (s.SettingsVersion < AppSettings.CurrentSettingsVersion)
+                s.SettingsVersion = AppSettings.CurrentSettingsVersion;
+            var dir = Path.GetDirectoryName(target);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
             var json = JsonSerializer.Serialize(s, IndentedJson);
-            File.WriteAllText(SettingsPath, json);
+            File.WriteAllText(target, json);
         }
         catch { }
     }

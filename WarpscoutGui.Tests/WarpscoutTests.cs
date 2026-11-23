@@ -248,8 +248,9 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Equal("ru", defaults.Language);
         Assert.True(defaults.ExcludeNodeEnabled);
         Assert.Equal("DME", defaults.ExcludedNode);
-        Assert.True(defaults.MinimizeToTray);
-        Assert.True(defaults.WarnOnCloseWithProxy);
+        Assert.False(defaults.MinimizeToTray);
+        Assert.True(defaults.MinimizeToTrayWithProxy);
+        Assert.False(defaults.WarnOnCloseWithProxy);
         Assert.Equal("", defaults.DefaultExitAction);
         Assert.Equal("-p awg -P -exclude-node DME", defaults.CustomScanFlags);
 
@@ -259,8 +260,9 @@ public sealed class WarpscoutTests : IDisposable
             Language = "en",
             ExcludeNodeEnabled = false,
             ExcludedNode = "FRA,AMS",
-            MinimizeToTray = false,
-            WarnOnCloseWithProxy = false,
+            MinimizeToTray = true,
+            MinimizeToTrayWithProxy = false,
+            WarnOnCloseWithProxy = true,
             DefaultExitAction = "exit",
             CustomScanFlags = "-p masque -P",
         };
@@ -272,9 +274,15 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Equal(custom.ExcludeNodeEnabled, roundTripped.ExcludeNodeEnabled);
         Assert.Equal(custom.ExcludedNode, roundTripped.ExcludedNode);
         Assert.Equal(custom.MinimizeToTray, roundTripped.MinimizeToTray);
+        Assert.Equal(custom.MinimizeToTrayWithProxy, roundTripped.MinimizeToTrayWithProxy);
         Assert.Equal(custom.WarnOnCloseWithProxy, roundTripped.WarnOnCloseWithProxy);
         Assert.Equal(custom.DefaultExitAction, roundTripped.DefaultExitAction);
         Assert.Equal(custom.CustomScanFlags, roundTripped.CustomScanFlags);
+
+        var legacy = JsonSerializer.Deserialize<AppSettings>("""{"MinimizeToTray":false}""");
+        Assert.NotNull(legacy);
+        Assert.False(legacy.MinimizeToTray);
+        Assert.True(legacy.MinimizeToTrayWithProxy);
     }
 
     [Fact]
@@ -593,16 +601,127 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Equal("https://github.com/HattabbI4/warpscout-gui", MainWindow.GithubRepoUrl);
 
         Strings.Instance.SetLanguage("ru");
-        var ruText = Strings.Instance.GithubStarText;
-        var ruTooltip = Strings.Instance.GithubStarTooltip;
-        Assert.Equal("Спасибо за звезду", ruText);
-        Assert.False(string.IsNullOrWhiteSpace(ruTooltip));
+        Assert.Equal("Спасибо за звезду", Strings.Instance.GithubStarText);
 
         Strings.Instance.SetLanguage("en");
-        var enText = Strings.Instance.GithubStarText;
-        var enTooltip = Strings.Instance.GithubStarTooltip;
-        Assert.Equal("Star on GitHub", enText);
-        Assert.False(string.IsNullOrWhiteSpace(enTooltip));
-        Assert.NotEqual(ruTooltip, enTooltip);
+        Assert.Equal("Star on GitHub", Strings.Instance.GithubStarText);
+    }
+
+    [Fact]
+    public void ResolveCloseAction_MatchesDefaultProxyAndSettingsMatrix()
+    {
+        var defaults = new AppSettings();
+        Assert.Equal(CloseAction.Exit, MainWindow.ResolveCloseAction(defaults, proxyActive: false));
+        Assert.Equal(CloseAction.MinimizeToTray, MainWindow.ResolveCloseAction(defaults, proxyActive: true));
+
+        var noProxyTray = new AppSettings
+        {
+            MinimizeToTray = false,
+            MinimizeToTrayWithProxy = false,
+            WarnOnCloseWithProxy = false,
+        };
+        Assert.Equal(CloseAction.Exit, MainWindow.ResolveCloseAction(noProxyTray, proxyActive: false));
+        Assert.Equal(CloseAction.Exit, MainWindow.ResolveCloseAction(noProxyTray, proxyActive: true));
+
+        var alwaysTray = new AppSettings
+        {
+            MinimizeToTray = true,
+            MinimizeToTrayWithProxy = false,
+            WarnOnCloseWithProxy = false,
+        };
+        Assert.Equal(CloseAction.MinimizeToTray, MainWindow.ResolveCloseAction(alwaysTray, proxyActive: false));
+        Assert.Equal(CloseAction.MinimizeToTray, MainWindow.ResolveCloseAction(alwaysTray, proxyActive: true));
+
+        var warnOnProxy = new AppSettings
+        {
+            MinimizeToTray = false,
+            MinimizeToTrayWithProxy = true,
+            WarnOnCloseWithProxy = true,
+        };
+        Assert.Equal(CloseAction.Exit, MainWindow.ResolveCloseAction(warnOnProxy, proxyActive: false));
+        Assert.Equal(CloseAction.Prompt, MainWindow.ResolveCloseAction(warnOnProxy, proxyActive: true));
+    }
+
+    [Fact]
+    public void Strings_TrayMinimizeAndNotificationStringsAreLocalized()
+    {
+        var s = Strings.Instance;
+
+        s.SetLanguage("ru");
+        var ruOption = s.TrayMinimizeOption;
+        var ruTitle = s.TrayMinimizedTitle;
+        var ruBody = s.TrayMinimizedBody;
+        var ruProxyBody = s.TrayMinimizedProxyBody;
+        Assert.False(string.IsNullOrWhiteSpace(ruOption));
+        Assert.False(string.IsNullOrWhiteSpace(ruTitle));
+        Assert.False(string.IsNullOrWhiteSpace(ruBody));
+        Assert.False(string.IsNullOrWhiteSpace(ruProxyBody));
+
+        s.SetLanguage("en");
+        Assert.False(string.IsNullOrWhiteSpace(s.TrayMinimizeOption));
+        Assert.False(string.IsNullOrWhiteSpace(s.TrayMinimizedTitle));
+        Assert.False(string.IsNullOrWhiteSpace(s.TrayMinimizedBody));
+        Assert.False(string.IsNullOrWhiteSpace(s.TrayMinimizedProxyBody));
+        Assert.NotEqual(ruOption, s.TrayMinimizeOption);
+        Assert.NotEqual(ruTitle, s.TrayMinimizedTitle);
+        Assert.NotEqual(ruBody, s.TrayMinimizedBody);
+        Assert.NotEqual(ruProxyBody, s.TrayMinimizedProxyBody);
+    }
+
+    [Fact]
+    public void LoadSettings_MigratesLegacySettingsOnceAndPreservesPostMigrationChoices()
+    {
+        var settingsPath = Path.Combine(_tempDir, "legacy-settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+              "CorePath": "C:\\tools\\warpscout.exe",
+              "Language": "en",
+              "ExcludeNodeEnabled": true,
+              "ExcludedNode": "DME",
+              "MinimizeToTray": true,
+              "WarnOnCloseWithProxy": true,
+              "DefaultExitAction": ""
+            }
+            """);
+
+        var migrated = CoreService.LoadSettings(settingsPath);
+        Assert.Equal(AppSettings.CurrentSettingsVersion, migrated.SettingsVersion);
+        Assert.Equal("en", migrated.Language);
+        Assert.Equal(@"C:\tools\warpscout.exe", migrated.CorePath);
+        Assert.False(migrated.MinimizeToTray);
+        Assert.True(migrated.MinimizeToTrayWithProxy);
+        Assert.False(migrated.WarnOnCloseWithProxy);
+
+        var persisted = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(settingsPath));
+        Assert.NotNull(persisted);
+        Assert.Equal(AppSettings.CurrentSettingsVersion, persisted.SettingsVersion);
+
+        // Choices made after migration must be preserved across reloads.
+        migrated.MinimizeToTray = true;
+        CoreService.SaveSettings(migrated, settingsPath);
+        var reloaded = CoreService.LoadSettings(settingsPath);
+        Assert.True(reloaded.MinimizeToTray);
+        Assert.Equal(AppSettings.CurrentSettingsVersion, reloaded.SettingsVersion);
+
+        // Legacy settings where the user explicitly chose "exit" keep both tray options off.
+        var exitPath = Path.Combine(_tempDir, "legacy-exit-settings.json");
+        File.WriteAllText(exitPath, """
+            {
+              "MinimizeToTray": true,
+              "WarnOnCloseWithProxy": false,
+              "DefaultExitAction": "exit"
+            }
+            """);
+        var migratedExit = CoreService.LoadSettings(exitPath);
+        Assert.Equal(AppSettings.CurrentSettingsVersion, migratedExit.SettingsVersion);
+        Assert.False(migratedExit.MinimizeToTray);
+        Assert.False(migratedExit.MinimizeToTrayWithProxy);
+        Assert.False(migratedExit.WarnOnCloseWithProxy);
+    }
+
+    [Fact]
+    public void NotifyIconDataSize_MatchesWin32StructLayout()
+    {
+        Assert.Equal(IntPtr.Size == 8 ? 976 : 956, MainWindow.NotifyIconDataSize);
     }
 }

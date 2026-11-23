@@ -7,14 +7,25 @@ namespace WarpscoutGui;
 
 public sealed class AppSettings
 {
+    internal const int CurrentSettingsVersion = 2;
+
+    public int SettingsVersion { get; set; }
     public string CorePath { get; set; } = "";
     public string Language { get; set; } = "ru";
     public bool ExcludeNodeEnabled { get; set; } = true;
     public string ExcludedNode { get; set; } = "DME";
-    public bool MinimizeToTray { get; set; } = true;
-    public bool WarnOnCloseWithProxy { get; set; } = true;
+    public bool MinimizeToTray { get; set; } = false;
+    public bool MinimizeToTrayWithProxy { get; set; } = true;
+    public bool WarnOnCloseWithProxy { get; set; } = false;
     public string DefaultExitAction { get; set; } = "";
     public string CustomScanFlags { get; set; } = "-p awg -P -exclude-node DME";
+}
+
+internal enum CloseAction
+{
+    Exit,
+    MinimizeToTray,
+    Prompt,
 }
 
 public sealed class SavedScan

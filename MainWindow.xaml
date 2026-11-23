@@ -810,7 +810,18 @@
                                         <TextBlock Text="{Binding TrayDesc, Source={x:Static local:Strings.Instance}}" FontSize="11.5" Foreground="#9CA3AF" />
                                     </StackPanel>
                                 </ui:CardControl.Header>
-                                <ui:ToggleSwitch x:Name="TglMinimizeToTray" IsChecked="True"
+                                <ui:ToggleSwitch x:Name="TglMinimizeToTray" IsChecked="False"
+                                                 Checked="SettingsToggle_Changed" Unchecked="SettingsToggle_Changed" />
+                            </ui:CardControl>
+
+                            <ui:CardControl Icon="{ui:SymbolIcon PlugConnected24}" Margin="0,0,0,4">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding TrayWithProxyTitle, Source={x:Static local:Strings.Instance}}" FontSize="13.5" FontWeight="Medium" Foreground="White" />
+                                        <TextBlock Text="{Binding TrayWithProxyDesc, Source={x:Static local:Strings.Instance}}" FontSize="11.5" Foreground="#9CA3AF" />
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="TglMinimizeToTrayWithProxy" IsChecked="True"
                                                  Checked="SettingsToggle_Changed" Unchecked="SettingsToggle_Changed" />
                             </ui:CardControl>
 
@@ -821,7 +832,7 @@
                                         <TextBlock Text="{Binding WarnExitDesc, Source={x:Static local:Strings.Instance}}" FontSize="11.5" Foreground="#9CA3AF" />
                                     </StackPanel>
                                 </ui:CardControl.Header>
-                                <ui:ToggleSwitch x:Name="TglWarnOnExit" IsChecked="True"
+                                <ui:ToggleSwitch x:Name="TglWarnOnExit" IsChecked="False"
                                                  Checked="SettingsToggle_Changed" Unchecked="SettingsToggle_Changed" />
                             </ui:CardControl>
                         </StackPanel>
@@ -841,6 +852,7 @@
                 Cursor="Hand"
                 MouseEnter="GithubCorner_MouseEnter"
                 MouseLeave="GithubCorner_MouseLeave"
+                MouseLeftButtonDown="GithubCorner_MouseLeftButtonDown"
                 MouseLeftButtonUp="GithubCorner_Click">
 
             <!-- Layer 1: Revealed Gold Glow Triangle (clipped dynamically via StreamGeometry) -->
@@ -934,24 +946,22 @@
             </Canvas>
 
             <!-- Layer 2: Curled Dark Mica Page Flap -->
-            <Canvas x:Name="GithubCornerFlapLayer" Width="140" Height="140" Background="{x:Null}">
-                <Path x:Name="GithubCornerFlapPath"
-                      Stroke="#2AFFFFFF"
-                      StrokeThickness="0.8"
-                      StrokeLineJoin="Round">
-                    <Path.Fill>
-                        <LinearGradientBrush StartPoint="0.10,0.10" EndPoint="0.65,0.65">
-                            <GradientStop Color="#262A31" Offset="0.00" />
-                            <GradientStop Color="#424956" Offset="0.42" />
-                            <GradientStop Color="#21252B" Offset="0.78" />
-                            <GradientStop Color="#14161A" Offset="1.00" />
-                        </LinearGradientBrush>
-                    </Path.Fill>
-                    <Path.Effect>
-                        <DropShadowEffect Color="Black" BlurRadius="12" ShadowDepth="4" Direction="135" Opacity="0.55" />
-                    </Path.Effect>
-                </Path>
-            </Canvas>
+            <Path x:Name="GithubCornerFlapPath"
+                  Stroke="#2AFFFFFF"
+                  StrokeThickness="0.8"
+                  StrokeLineJoin="Round">
+                <Path.Fill>
+                    <LinearGradientBrush StartPoint="0.10,0.10" EndPoint="0.65,0.65">
+                        <GradientStop Color="#262A31" Offset="0.00" />
+                        <GradientStop Color="#424956" Offset="0.42" />
+                        <GradientStop Color="#21252B" Offset="0.78" />
+                        <GradientStop Color="#14161A" Offset="1.00" />
+                    </LinearGradientBrush>
+                </Path.Fill>
+                <Path.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="12" ShadowDepth="4" Direction="135" Opacity="0.55" />
+                </Path.Effect>
+            </Path>
         </Canvas>
 
         <!-- Exit Warning Modal Dialog -->
