@@ -586,4 +586,23 @@ public sealed class WarpscoutTests : IDisposable
         Strings.Instance.SetLanguage("en");
         Assert.Equal("Scanned: 2026-11-21 14:05", Strings.Instance.LastScanTime(timestamp));
     }
+
+    [Fact]
+    public void GithubCorner_RepoUrlAndLocalizedStringsMatchRequirements()
+    {
+        Assert.Equal("https://github.com/HattabbI4/warpscout-gui", MainWindow.GithubRepoUrl);
+
+        Strings.Instance.SetLanguage("ru");
+        var ruText = Strings.Instance.GithubStarText;
+        var ruTooltip = Strings.Instance.GithubStarTooltip;
+        Assert.Equal("Спасибо за звезду", ruText);
+        Assert.False(string.IsNullOrWhiteSpace(ruTooltip));
+
+        Strings.Instance.SetLanguage("en");
+        var enText = Strings.Instance.GithubStarText;
+        var enTooltip = Strings.Instance.GithubStarTooltip;
+        Assert.Equal("Star on GitHub", enText);
+        Assert.False(string.IsNullOrWhiteSpace(enTooltip));
+        Assert.NotEqual(ruTooltip, enTooltip);
+    }
 }

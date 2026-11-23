@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Wpf.Ui.Controls;
 using Drawing = System.Drawing;
 using WinForms = System.Windows.Forms;
@@ -15,6 +16,27 @@ namespace WarpscoutGui;
 
 public partial class MainWindow : FluentWindow
 {
+    internal const string GithubRepoUrl = "https://github.com/HattabbI4/warpscout-gui";
+
+    private static readonly DependencyProperty GithubCornerProgressProperty =
+        DependencyProperty.Register(
+            nameof(GithubCornerProgress),
+            typeof(double),
+            typeof(MainWindow),
+            new PropertyMetadata(0.0, OnGithubCornerProgressChanged));
+
+    private double GithubCornerProgress
+    {
+        get => (double)GetValue(GithubCornerProgressProperty);
+        set => SetValue(GithubCornerProgressProperty, value);
+    }
+
+    private static void OnGithubCornerProgressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is MainWindow win)
+            win.UpdateGithubCornerVisuals((double)e.NewValue);
+    }
+
     private readonly AppSettings _settings;
     private readonly ObservableCollection<EndpointItem> _endpoints = [];
     private readonly Dictionary<string, EndpointItem> _endpointMap = new(StringComparer.OrdinalIgnoreCase);
@@ -50,6 +72,7 @@ public partial class MainWindow : FluentWindow
     public MainWindow()
     {
         InitializeComponent();
+        UpdateGithubCornerVisuals(0.0);
         _settings = CoreService.LoadSettings();
 
         GridEndpoints.ItemsSource = _endpoints;
@@ -277,6 +300,96 @@ public partial class MainWindow : FluentWindow
 
     private void BtnGoToServers_Click(object sender, RoutedEventArgs e) => SelectPage("servers");
     private void BtnGoToScanner_Click(object sender, RoutedEventArgs e) => SelectPage(_isAdvancedScanMode ? "advanced" : "scanner");
+
+    private void GithubCorner_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) =>
+        AnimateGithubCorner(true);
+
+    private void GithubCorner_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) =>
+        AnimateGithubCorner(false);
+
+    private void GithubCorner_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            Process.Start(new ProcessStartInfo(GithubRepoUrl) { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private void AnimateGithubCorner(bool open)
+    {
+        var anim = new DoubleAnimation(
+            open ? 1.0 : 0.0,
+            TimeSpan.FromMilliseconds(open ? 260 : 210))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        BeginAnimation(GithubCornerProgressProperty, anim, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    internal void UpdateGithubCornerVisuals(double p)
+    {
+        p = Math.Clamp(p, 0.0, 1.0);
+        const double box = 140.0;
+        double s = 50.0 + 82.0 * p;
+        double edge = box - s;
+
+        System.Windows.Point Pt(double u, double v) => new(edge + s * u, edge + s * v);
+
+        var revealTri = new StreamGeometry();
+        using (var ctx = revealTri.Open())
+        {
+            ctx.BeginFigure(new System.Windows.Point(edge, box), isFilled: true, isClosed: true);
+            ctx.LineTo(new System.Windows.Point(box, edge), isStroked: true, isSmoothJoin: false);
+            ctx.LineTo(new System.Windows.Point(box, box), isStroked: true, isSmoothJoin: false);
+        }
+        revealTri.Freeze();
+        GithubCornerRevealLayer.Clip = revealTri;
+        GithubCornerRevealBg.Data = revealTri;
+
+        double d = 0.22 * s;
+        var creaseShadow = new StreamGeometry();
+        using (var ctx = creaseShadow.Open())
+        {
+            ctx.BeginFigure(new System.Windows.Point(edge, box), isFilled: true, isClosed: true);
+            ctx.LineTo(new System.Windows.Point(box, edge), isStroked: false, isSmoothJoin: false);
+            ctx.LineTo(new System.Windows.Point(box, edge + d), isStroked: false, isSmoothJoin: false);
+            ctx.LineTo(new System.Windows.Point(edge + d, box), isStroked: false, isSmoothJoin: false);
+        }
+        creaseShadow.Freeze();
+        GithubCornerCreaseShadow.Data = creaseShadow;
+
+        double glowR = 0.36 * s;
+        double glowC = box - 0.22 * s;
+        GithubCornerGlow.Width = glowR * 2;
+        GithubCornerGlow.Height = glowR * 2;
+        Canvas.SetLeft(GithubCornerGlow, glowC - glowR);
+        Canvas.SetTop(GithubCornerGlow, glowC - glowR);
+
+        var flapGeo = new StreamGeometry();
+        using (var ctx = flapGeo.Open())
+        {
+            ctx.BeginFigure(Pt(0.00, 1.00), isFilled: true, isClosed: true);
+            ctx.BezierTo(Pt(0.05, 0.78), Pt(0.145, 0.485), Pt(0.18, 0.38), isStroked: true, isSmoothJoin: true);
+            ctx.QuadraticBezierTo(Pt(0.23, 0.23), Pt(0.38, 0.18), isStroked: true, isSmoothJoin: true);
+            ctx.BezierTo(Pt(0.485, 0.145), Pt(0.78, 0.05), Pt(1.00, 0.00), isStroked: true, isSmoothJoin: true);
+        }
+        flapGeo.Freeze();
+        GithubCornerFlapPath.Data = flapGeo;
+
+        double octoScale = 0.77 + 0.40 * p;
+        GithubCornerOctoScale.ScaleX = octoScale;
+        GithubCornerOctoScale.ScaleY = octoScale;
+        GithubCornerOctoRotate.Angle = -6.0 * p;
+
+        double octoOffset = 111.0 - 9.0 * p;
+        GithubCornerOctoTranslate.X = octoOffset;
+        GithubCornerOctoTranslate.Y = octoOffset;
+
+        GithubCornerCta.Opacity = Math.Clamp((p - 0.25) / 0.75, 0.0, 1.0);
+        GithubCornerStarGlint.Opacity = Math.Clamp((p - 0.45) / 0.55, 0.0, 1.0);
+    }
 
     private async Task RefreshCoreAndAccountAsync()
     {

@@ -32,6 +32,12 @@ public sealed class Strings : INotifyPropertyChanged
     public string NavServers => T("Серверы", "Servers");
     public string NavSettings => T("Настройки", "Settings");
 
+    // GitHub Star Corner
+    public string GithubStarText => T("Спасибо за звезду", "Star on GitHub");
+    public string GithubStarTooltip => T(
+        "Открыть репозиторий на GitHub и поставить звезду",
+        "Open GitHub repository and give it a star");
+
     // Global Banners
     public string CoreDownloadTitle => T("Обновление / скачивание ядра warpscout.exe", "Updating / downloading warpscout.exe core");
     public string CoreDownloadLockNote => T("Действия заблокированы до завершения", "Actions locked until complete");
