@@ -5,8 +5,10 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -20,6 +22,33 @@ namespace WarpscoutGui;
 public partial class MainWindow : FluentWindow
 {
     internal const string GithubRepoUrl = "https://github.com/HattabbI4/warpscout-gui";
+
+    [GeneratedRegex(@"(\*\*[^*]+\*\*|`[^`]+`)")]
+    private static partial Regex InlineMarkdownRegex();
+
+    private static readonly SolidColorBrush BrushCardBg = FreezeBrush(14, 255, 255, 255);
+    private static readonly SolidColorBrush BrushCardBorder = FreezeBrush(28, 255, 255, 255);
+    private static readonly SolidColorBrush BrushCardCurrentBorder = FreezeBrush(110, 96, 205, 255);
+    private static readonly SolidColorBrush BrushDivider = FreezeBrush(24, 255, 255, 255);
+    private static readonly SolidColorBrush BrushMuted = FreezeBrush(255, 156, 163, 175);
+    private static readonly SolidColorBrush BrushSubheading = FreezeBrush(255, 229, 231, 235);
+    private static readonly SolidColorBrush BrushBodyText = FreezeBrush(255, 209, 213, 219);
+    private static readonly SolidColorBrush BrushAccent = FreezeBrush(255, 96, 205, 255);
+    private static readonly SolidColorBrush BrushCode = FreezeBrush(255, 147, 197, 253);
+    private static readonly System.Windows.Media.FontFamily ConsolasFont = new("Consolas");
+    private static readonly (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) BadgeCurrentBrushes = CreateBadgeBrushes(16, 185, 129);
+    private static readonly (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) BadgeLatestBrushes = CreateBadgeBrushes(59, 130, 246);
+    private static readonly (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) BadgeReadyBrushes = CreateBadgeBrushes(96, 205, 255);
+
+    private static (SolidColorBrush, SolidColorBrush, SolidColorBrush) CreateBadgeBrushes(byte r, byte g, byte b) =>
+        (FreezeBrush(42, r, g, b), FreezeBrush(110, r, g, b), FreezeBrush(255, r, g, b));
+
+    private static SolidColorBrush FreezeBrush(byte a, byte r, byte g, byte b)
+    {
+        var br = new SolidColorBrush(System.Windows.Media.Color.FromArgb(a, r, g, b));
+        br.Freeze();
+        return br;
+    }
 
     private static readonly DependencyProperty GithubCornerProgressProperty =
         DependencyProperty.Register(
@@ -68,6 +97,24 @@ public partial class MainWindow : FluentWindow
     private bool _githubCornerPressed;
     private readonly DispatcherTimer _githubCornerHoverTimer;
 
+    private readonly Version _guiCurrentVersion;
+    private readonly string _guiBuildVariant;
+    private List<GuiReleaseInfo> _guiReleases = [];
+    private GuiReleaseInfo? _latestNewerGuiRelease;
+    private StagedGuiUpdate? _stagedGuiUpdate;
+    private GuiReleaseInfo? _pendingGuiRelease;
+    private CancellationTokenSource? _guiDownloadCts;
+    private string? _guiDownloadingTag;
+    private bool _isCheckingGuiUpdates;
+    private bool _isDownloadingGuiUpdate;
+    private bool _guiHasChecked;
+    private string? _guiUpdateError;
+    private int _guiDownloadPercent;
+    private string _guiDownloadProgressText = "";
+    private string? _guiBannerDismissedTag;
+    private bool _guiUpdateLaunched;
+    private readonly HashSet<string> _expandedChangelogTags = new(StringComparer.OrdinalIgnoreCase);
+
     private WinForms.NotifyIcon? _trayIcon;
     private Drawing.Icon? _trayIconHandle;
     private WinForms.ToolStripMenuItem? _trayShowItem;
@@ -87,6 +134,8 @@ public partial class MainWindow : FluentWindow
                 AnimateGithubCorner(true);
         };
         _settings = CoreService.LoadSettings();
+        _guiCurrentVersion = GuiUpdateService.GetCurrentVersion();
+        _guiBuildVariant = GuiUpdateService.GetBuildVariant();
 
         GridEndpoints.ItemsSource = _endpoints;
         LoadSettingsIntoUI();
@@ -113,6 +162,7 @@ public partial class MainWindow : FluentWindow
         TglMinimizeToTray.IsChecked = _settings.MinimizeToTray;
         TglMinimizeToTrayWithProxy.IsChecked = _settings.MinimizeToTrayWithProxy;
         TglWarnOnExit.IsChecked = _settings.WarnOnCloseWithProxy;
+        TglAutoUpdateGui.IsChecked = _settings.AutoUpdateGui;
 
         var awg31 = _settings.Awg31 ??= new Awg31Options();
         TxtAwg31Padding.Text = awg31.Padding;
@@ -285,6 +335,29 @@ public partial class MainWindow : FluentWindow
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        var (staged, cached) = await Task.Run(() =>
+        {
+            StagedGuiUpdate? s = null;
+            try { s = GuiUpdateService.CleanupUpdatesDir(_guiCurrentVersion); } catch { }
+            var c = GuiUpdateService.LoadCachedReleases(_guiBuildVariant);
+            return (s, c);
+        });
+
+        if (cached != null)
+        {
+            _guiReleases = cached.Releases;
+            _latestNewerGuiRelease = _guiReleases.FirstOrDefault(r => r.Version > _guiCurrentVersion);
+            if (_latestNewerGuiRelease != null)
+                _expandedChangelogTags.Add(_latestNewerGuiRelease.TagName);
+        }
+        if (_stagedGuiUpdate == null)
+            _stagedGuiUpdate = staged;
+        UpdateGuiUpdateUI();
+        RebuildGuiReleasesList();
+
+        if (_settings.AutoUpdateGui)
+            _ = CheckGuiUpdatesAsync(isAutoStartup: true);
+
         await RefreshCoreAndAccountAsync();
 
         // First-launch or upgrading from the temporary fork / pre-0.17 core: download upstream core and lock UI.
@@ -345,6 +418,7 @@ public partial class MainWindow : FluentWindow
         TxtNavServers.Visibility = labelVis;
         TxtNavSettings.Visibility = labelVis;
         NavServersBadge.Visibility = !collapsed && _endpoints.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NavSettingsUpdateDot.Visibility = !collapsed && _latestNewerGuiRelease != null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void BtnToggleSidebar_Click(object sender, RoutedEventArgs e) => SetSidebarCollapsed(!_isSidebarCollapsed);
@@ -710,10 +784,578 @@ public partial class MainWindow : FluentWindow
         _settings.MinimizeToTray = TglMinimizeToTray.IsChecked == true;
         _settings.MinimizeToTrayWithProxy = TglMinimizeToTrayWithProxy.IsChecked == true;
         _settings.WarnOnCloseWithProxy = TglWarnOnExit.IsChecked == true;
+        _settings.AutoUpdateGui = TglAutoUpdateGui.IsChecked == true;
         _settings.DefaultExitAction = "";
         if (_trayMinimizeToTrayItem != null)
             _trayMinimizeToTrayItem.Checked = _settings.MinimizeToTray;
         CoreService.SaveSettings(_settings);
+        UpdateGuiUpdateUI();
+    }
+
+    private void GuiUpdateBanner_Click(object sender, MouseButtonEventArgs e)
+    {
+        SelectPage("settings");
+        CardGuiVersions.IsExpanded = true;
+        PageSettings.ScrollToTop();
+    }
+
+    private void BtnDismissGuiBanner_Click(object sender, RoutedEventArgs e)
+    {
+        _guiBannerDismissedTag = _latestNewerGuiRelease?.TagName;
+        UpdateGuiUpdateUI();
+    }
+
+    private async void BtnCheckGuiUpdates_Click(object sender, RoutedEventArgs e) =>
+        await CheckGuiUpdatesAsync(isAutoStartup: false);
+
+    private void BtnPrimaryGuiUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_latestNewerGuiRelease != null)
+            PromptGuiReleaseInstall(_latestNewerGuiRelease);
+    }
+
+    private void BtnCancelGuiDownload_Click(object sender, RoutedEventArgs e) =>
+        _guiDownloadCts?.Cancel();
+
+    private void BtnGuiConfirmCancel_Click(object sender, RoutedEventArgs e)
+    {
+        _pendingGuiRelease = null;
+        GuiUpdateConfirmOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private async void BtnGuiConfirmOk_Click(object sender, RoutedEventArgs e)
+    {
+        var release = _pendingGuiRelease;
+        _pendingGuiRelease = null;
+        GuiUpdateConfirmOverlay.Visibility = Visibility.Collapsed;
+        if (release == null) return;
+
+        if (IsReleaseStaged(release) && _stagedGuiUpdate != null)
+            ApplyGuiUpdateAndRestart(_stagedGuiUpdate.FilePath);
+        else
+            await DownloadGuiReleaseAsync(release, applyImmediately: true);
+    }
+
+    private bool IsReleaseStaged(GuiReleaseInfo rel) =>
+        _stagedGuiUpdate != null &&
+        string.Equals(_stagedGuiUpdate.TagName, rel.TagName, StringComparison.OrdinalIgnoreCase) &&
+        File.Exists(_stagedGuiUpdate.FilePath);
+
+    private async Task CheckGuiUpdatesAsync(bool isAutoStartup)
+    {
+        if (_isCheckingGuiUpdates) return;
+        _isCheckingGuiUpdates = true;
+        if (!isAutoStartup)
+            _guiUpdateError = null;
+        UpdateGuiUpdateUI();
+
+        try
+        {
+            var releases = await GuiUpdateService.FetchReleasesAsync(_guiBuildVariant, CancellationToken.None);
+            _guiReleases = releases;
+            _guiHasChecked = true;
+            _guiUpdateError = null;
+            _latestNewerGuiRelease = _guiReleases.FirstOrDefault(r => r.Version > _guiCurrentVersion);
+            if (_latestNewerGuiRelease != null)
+                _expandedChangelogTags.Add(_latestNewerGuiRelease.TagName);
+            if (_stagedGuiUpdate != null && !File.Exists(_stagedGuiUpdate.FilePath))
+                _stagedGuiUpdate = null;
+        }
+        catch (Exception ex)
+        {
+            if (!isAutoStartup)
+                _guiUpdateError = ex.Message;
+        }
+        finally
+        {
+            _isCheckingGuiUpdates = false;
+            UpdateGuiUpdateUI();
+            RebuildGuiReleasesList();
+        }
+
+        if (isAutoStartup &&
+            _settings.AutoUpdateGui &&
+            _latestNewerGuiRelease != null &&
+            !IsReleaseStaged(_latestNewerGuiRelease) &&
+            !_isDownloadingGuiUpdate &&
+            GuiUpdateService.IsSelfUpdateSupported())
+        {
+            await DownloadGuiReleaseAsync(_latestNewerGuiRelease, applyImmediately: false);
+        }
+    }
+
+    private async Task DownloadGuiReleaseAsync(GuiReleaseInfo release, bool applyImmediately)
+    {
+        _guiDownloadCts?.Cancel();
+        using var cts = new CancellationTokenSource();
+        _guiDownloadCts = cts;
+        var ct = cts.Token;
+
+        bool stageForExit = release.Version > _guiCurrentVersion;
+        _isDownloadingGuiUpdate = true;
+        _guiDownloadingTag = release.TagName;
+        _guiDownloadPercent = 0;
+        _guiDownloadProgressText = Strings.Instance.CoreDownloadConnecting;
+        _guiUpdateError = null;
+        UpdateGuiUpdateUI();
+        RebuildGuiReleasesList();
+
+        try
+        {
+            var progress = new Progress<(double percent, long read, long total)>(p =>
+            {
+                if (!ReferenceEquals(_guiDownloadCts, cts)) return;
+                _guiDownloadPercent = (int)Math.Round(p.percent);
+                _guiDownloadProgressText = p.total > 0
+                    ? Strings.Instance.GuiDownloadProgressWithTotal(p.read, p.total)
+                    : Strings.Instance.GuiDownloadProgressNoTotal(p.read);
+                UpdateGuiUpdateUI();
+            });
+
+            var staged = await GuiUpdateService.DownloadAndStageAsync(release, progress, ct, stageForExit: stageForExit);
+            if (!ReferenceEquals(_guiDownloadCts, cts))
+                return;
+
+            if (stageForExit)
+                _stagedGuiUpdate = staged;
+            _guiDownloadCts = null;
+            _isDownloadingGuiUpdate = false;
+            _guiDownloadingTag = null;
+            UpdateGuiUpdateUI();
+            RebuildGuiReleasesList();
+
+            if (applyImmediately)
+                ApplyGuiUpdateAndRestart(staged.FilePath, deleteOnFailure: !stageForExit);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            if (ReferenceEquals(_guiDownloadCts, cts))
+            {
+                _guiDownloadCts = null;
+                _isDownloadingGuiUpdate = false;
+                _guiDownloadingTag = null;
+                UpdateGuiUpdateUI();
+                RebuildGuiReleasesList();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_guiDownloadCts, cts))
+            {
+                _guiDownloadCts = null;
+                _isDownloadingGuiUpdate = false;
+                _guiDownloadingTag = null;
+                _guiUpdateError = ex.Message;
+                UpdateGuiUpdateUI();
+                RebuildGuiReleasesList();
+            }
+        }
+    }
+
+    private void PromptGuiReleaseInstall(GuiReleaseInfo release)
+    {
+        var s = Strings.Instance;
+        if (!GuiUpdateService.IsSelfUpdateSupported())
+        {
+            _guiUpdateError = s.GuiDevModeNotSupported;
+            UpdateGuiUpdateUI();
+            return;
+        }
+
+        _pendingGuiRelease = release;
+        bool isUpgrade = release.Version > _guiCurrentVersion;
+        TxtGuiConfirmTitle.Text = isUpgrade
+            ? s.GuiConfirmUpdateTitle(release.TagName)
+            : s.GuiConfirmRollbackTitle(release.TagName);
+        TxtGuiConfirmBody.Text = s.GuiConfirmBody($"v{_guiCurrentVersion.ToString(3)}", release.TagName);
+
+        bool busy = _scanCts != null || (_socksProcess != null && !_socksProcess.HasExited);
+        GuiConfirmWarningBox.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        GuiUpdateConfirmOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyGuiUpdateAndRestart(string stagedExePath, bool deleteOnFailure = false)
+    {
+        try
+        {
+            StopScanProcess();
+            StopSocksProcess();
+            SyncAwg31FromUI();
+            CoreService.SaveSettings(_settings);
+
+            _guiUpdateLaunched = true;
+            var launched = GuiUpdateService.LaunchApplyUpdate(
+                Environment.ProcessPath!,
+                stagedExePath,
+                relaunch: true,
+                allowElevation: true);
+            if (!launched)
+            {
+                _guiUpdateLaunched = false;
+                if (deleteOnFailure)
+                    try { if (File.Exists(stagedExePath)) File.Delete(stagedExePath); } catch { }
+                return;
+            }
+            ForceShutdown();
+        }
+        catch (Exception ex)
+        {
+            _guiUpdateLaunched = false;
+            if (deleteOnFailure)
+                try { if (File.Exists(stagedExePath)) File.Delete(stagedExePath); } catch { }
+            _guiUpdateError = ex.Message;
+            UpdateGuiUpdateUI();
+        }
+    }
+
+    private void UpdateGuiUpdateUI()
+    {
+        if (TxtGuiCurrentVersion == null) return;
+        var s = Strings.Instance;
+        TxtGuiCurrentVersion.Text = s.GuiUpdateCurrentTitle(_guiCurrentVersion.ToString(3), _guiBuildVariant);
+        TxtGuiVersionsDesc.Text = s.GuiVersionsSubtitle(_guiReleases.Count);
+        NavSettingsUpdateDot.Visibility = !_isSidebarCollapsed && _latestNewerGuiRelease != null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        bool showBanner = _latestNewerGuiRelease != null &&
+            !string.Equals(_guiBannerDismissedTag, _latestNewerGuiRelease.TagName, StringComparison.OrdinalIgnoreCase);
+        GuiUpdateBanner.Visibility = showBanner ? Visibility.Visible : Visibility.Collapsed;
+        if (showBanner && _latestNewerGuiRelease != null)
+        {
+            if (_isDownloadingGuiUpdate && string.Equals(_guiDownloadingTag, _latestNewerGuiRelease.TagName, StringComparison.OrdinalIgnoreCase))
+            {
+                TxtGuiBannerTitle.Text = s.GuiBannerDownloading(_latestNewerGuiRelease.TagName, _guiDownloadPercent);
+                TxtGuiBannerSub.Text = s.GuiBannerActionHint;
+            }
+            else if (IsReleaseStaged(_latestNewerGuiRelease))
+            {
+                TxtGuiBannerTitle.Text = s.GuiBannerReady(_latestNewerGuiRelease.TagName);
+                TxtGuiBannerSub.Text = _settings.AutoUpdateGui ? s.GuiBannerReadyHint : s.GuiBannerActionHint;
+            }
+            else
+            {
+                TxtGuiBannerTitle.Text = s.GuiBannerAvailable(_latestNewerGuiRelease.TagName);
+                TxtGuiBannerSub.Text = s.GuiBannerActionHint;
+            }
+        }
+
+        BtnCheckGuiUpdates.IsEnabled = !_isCheckingGuiUpdates && !_isDownloadingGuiUpdate;
+        GuiDownloadProgressCard.Visibility = _isDownloadingGuiUpdate ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancelGuiDownload.Visibility = _isDownloadingGuiUpdate ? Visibility.Visible : Visibility.Collapsed;
+
+        if (_isDownloadingGuiUpdate)
+        {
+            PbGuiDownload.Value = _guiDownloadPercent;
+            TxtGuiDownloadStatus.Text = s.GuiUpdateStatusDownloading(_guiDownloadingTag ?? "", _guiDownloadProgressText);
+            TxtGuiUpdateStatus.Text = TxtGuiDownloadStatus.Text;
+            BtnPrimaryGuiUpdate.Visibility = Visibility.Collapsed;
+        }
+        else if (_isCheckingGuiUpdates)
+        {
+            TxtGuiUpdateStatus.Text = s.GuiUpdateStatusChecking;
+            BtnPrimaryGuiUpdate.Visibility = Visibility.Collapsed;
+        }
+        else if (!string.IsNullOrEmpty(_guiUpdateError))
+        {
+            TxtGuiUpdateStatus.Text = s.GuiUpdateStatusError(_guiUpdateError);
+            UpdatePrimaryGuiUpdateButton(s);
+        }
+        else if (_latestNewerGuiRelease != null)
+        {
+            TxtGuiUpdateStatus.Text = IsReleaseStaged(_latestNewerGuiRelease)
+                ? s.GuiUpdateStatusReady(_latestNewerGuiRelease.TagName, _settings.AutoUpdateGui)
+                : s.GuiUpdateStatusAvailable(_latestNewerGuiRelease.TagName);
+            UpdatePrimaryGuiUpdateButton(s);
+        }
+        else
+        {
+            TxtGuiUpdateStatus.Text = _guiHasChecked ? s.GuiUpdateStatusUpToDate : s.GuiUpdateStatusIdle;
+            BtnPrimaryGuiUpdate.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void UpdatePrimaryGuiUpdateButton(Strings s)
+    {
+        if (_latestNewerGuiRelease == null)
+        {
+            BtnPrimaryGuiUpdate.Visibility = Visibility.Collapsed;
+            return;
+        }
+        BtnPrimaryGuiUpdate.Visibility = Visibility.Visible;
+        BtnPrimaryGuiUpdate.Content = IsReleaseStaged(_latestNewerGuiRelease)
+            ? s.BtnRestartAndUpdate
+            : s.BtnUpdateTo(_latestNewerGuiRelease.TagName);
+    }
+
+    private void RebuildGuiReleasesList()
+    {
+        if (GuiReleasesHost == null) return;
+        GuiReleasesHost.Children.Clear();
+        TxtGuiReleasesEmpty.Visibility = _guiReleases.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        var s = Strings.Instance;
+        var lang = s.IsEnglish ? "en" : "ru";
+        var latestTag = _guiReleases.FirstOrDefault()?.TagName;
+
+        foreach (var rel in _guiReleases)
+        {
+            bool isCurrent = rel.Version == _guiCurrentVersion;
+            bool isLatest = string.Equals(rel.TagName, latestTag, StringComparison.OrdinalIgnoreCase);
+            bool isStaged = IsReleaseStaged(rel);
+            bool canAction = GuiUpdateService.CanInstallOrRollback(rel.Version, _guiCurrentVersion);
+            bool isExpanded = _expandedChangelogTags.Contains(rel.TagName);
+
+            var card = new Border
+            {
+                Background = BrushCardBg,
+                BorderBrush = isCurrent ? BrushCardCurrentBorder : BrushCardBorder,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(12, 10, 12, 10),
+                Margin = new Thickness(0, 0, 0, 6),
+            };
+
+            var root = new StackPanel();
+            var header = new Grid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var titleRow = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            titleRow.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = rel.TagName,
+                FontSize = 13.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = System.Windows.Media.Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+            });
+
+            if (isCurrent)
+                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeCurrent, BadgeCurrentBrushes));
+            if (isLatest)
+                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeLatest, BadgeLatestBrushes));
+            if (isStaged)
+                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeReady, BadgeReadyBrushes));
+
+            var metaParts = new List<string>();
+            if (rel.PublishedAt != DateTimeOffset.MinValue)
+                metaParts.Add(s.GuiReleaseDate(rel.PublishedAt));
+            if (rel.AssetSize > 0)
+                metaParts.Add(s.GuiAssetSizeMb(rel.AssetSize));
+
+            left.Children.Add(titleRow);
+            if (metaParts.Count > 0)
+            {
+                left.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = string.Join(" · ", metaParts),
+                    FontSize = 11,
+                    Foreground = BrushMuted,
+                    Margin = new Thickness(0, 2, 0, 0),
+                });
+            }
+            Grid.SetColumn(left, 0);
+            header.Children.Add(left);
+
+            var right = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            if (canAction)
+            {
+                var actionBtn = new Wpf.Ui.Controls.Button
+                {
+                    Content = isStaged
+                        ? s.BtnRestartAndUpdate
+                        : (rel.Version > _guiCurrentVersion ? s.BtnInstallVersion : s.BtnRollback),
+                    Appearance = isStaged || rel.Version > _guiCurrentVersion
+                        ? ControlAppearance.Primary
+                        : ControlAppearance.Secondary,
+                    Padding = new Thickness(10, 4, 10, 4),
+                    FontSize = 11.5,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    IsEnabled = !_isDownloadingGuiUpdate,
+                };
+                var captured = rel;
+                actionBtn.Click += (_, _) => PromptGuiReleaseInstall(captured);
+                right.Children.Add(actionBtn);
+            }
+            else if (!isCurrent)
+            {
+                right.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = s.GuiViewOnly,
+                    ToolTip = s.GuiViewOnlyTooltip,
+                    FontSize = 11.5,
+                    Foreground = BrushMuted,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0),
+                });
+            }
+
+            var toggleBtn = new Wpf.Ui.Controls.Button
+            {
+                Content = isExpanded ? s.BtnHideChanges : s.BtnShowChanges,
+                Appearance = ControlAppearance.Transparent,
+                Padding = new Thickness(8, 4, 8, 4),
+                FontSize = 11.5,
+            };
+            var tagKey = rel.TagName;
+            toggleBtn.Click += (_, _) =>
+            {
+                if (!_expandedChangelogTags.Add(tagKey))
+                    _expandedChangelogTags.Remove(tagKey);
+                RebuildGuiReleasesList();
+            };
+            right.Children.Add(toggleBtn);
+            Grid.SetColumn(right, 1);
+            header.Children.Add(right);
+            root.Children.Add(header);
+
+            if (isExpanded)
+            {
+                var notes = GuiUpdateService.ExtractChangelog(rel.Body, lang);
+                var bodyPanel = string.IsNullOrWhiteSpace(notes)
+                    ? (UIElement)new System.Windows.Controls.TextBlock
+                    {
+                        Text = s.GuiNoChangelog,
+                        FontSize = 11.5,
+                        Foreground = BrushMuted,
+                    }
+                    : BuildChangelogPanel(notes);
+
+                root.Children.Add(new Border
+                {
+                    BorderBrush = BrushDivider,
+                    BorderThickness = new Thickness(0, 1, 0, 0),
+                    Margin = new Thickness(0, 8, 0, 0),
+                    Padding = new Thickness(0, 8, 0, 0),
+                    Child = bodyPanel,
+                });
+            }
+
+            card.Child = root;
+            GuiReleasesHost.Children.Add(card);
+        }
+    }
+
+    private static Border CreateVersionBadge(string text, (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) brushes) => new()
+    {
+        Background = brushes.Bg,
+        BorderBrush = brushes.Border,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(4),
+        Padding = new Thickness(6, 1, 6, 1),
+        Margin = new Thickness(0, 0, 6, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        Child = new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            FontSize = 10.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = brushes.Fg,
+        },
+    };
+
+    private static StackPanel BuildChangelogPanel(string markdown)
+    {
+        var panel = new StackPanel();
+        foreach (var raw in markdown.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            if (line.StartsWith("### ", StringComparison.Ordinal) || line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                var heading = line.TrimStart('#', ' ');
+                var tb = new System.Windows.Controls.TextBlock
+                {
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = BrushSubheading,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, panel.Children.Count > 0 ? 6 : 0, 0, 2),
+                };
+                AppendInlineMarkdownRuns(tb.Inlines, heading);
+                panel.Children.Add(tb);
+            }
+            else if (line.StartsWith("- ", StringComparison.Ordinal) || line.StartsWith("* ", StringComparison.Ordinal))
+            {
+                var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var bullet = new System.Windows.Controls.TextBlock
+                {
+                    Text = "•",
+                    FontSize = 11.5,
+                    Foreground = BrushAccent,
+                    Margin = new Thickness(4, 0, 7, 0),
+                };
+                Grid.SetColumn(bullet, 0);
+                row.Children.Add(bullet);
+
+                var tb = new System.Windows.Controls.TextBlock
+                {
+                    FontSize = 11.5,
+                    Foreground = BrushBodyText,
+                    TextWrapping = TextWrapping.Wrap,
+                };
+                AppendInlineMarkdownRuns(tb.Inlines, line[2..].Trim());
+                Grid.SetColumn(tb, 1);
+                row.Children.Add(tb);
+                panel.Children.Add(row);
+            }
+            else
+            {
+                var tb = new System.Windows.Controls.TextBlock
+                {
+                    FontSize = 11.5,
+                    Foreground = BrushBodyText,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 1, 0, 1),
+                };
+                AppendInlineMarkdownRuns(tb.Inlines, line);
+                panel.Children.Add(tb);
+            }
+        }
+        return panel;
+    }
+
+    private static void AppendInlineMarkdownRuns(InlineCollection inlines, string text)
+    {
+        int pos = 0;
+        foreach (Match m in InlineMarkdownRegex().Matches(text))
+        {
+            if (m.Index > pos)
+                inlines.Add(new Run(text[pos..m.Index]));
+
+            var tok = m.Value;
+            if (tok.StartsWith("**", StringComparison.Ordinal))
+            {
+                inlines.Add(new Run(tok[2..^2])
+                {
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = System.Windows.Media.Brushes.White,
+                });
+            }
+            else
+            {
+                inlines.Add(new Run(tok[1..^1])
+                {
+                    FontFamily = ConsolasFont,
+                    Foreground = BrushCode,
+                });
+            }
+            pos = m.Index + m.Length;
+        }
+        if (pos < text.Length)
+            inlines.Add(new Run(text[pos..]));
     }
 
     private void CmbLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -752,6 +1394,8 @@ public partial class MainWindow : FluentWindow
             TxtEmptyTable.Text = s.EmptyTableInitial;
         if (_scanCts == null && ScanProgressCard.Visibility != Visibility.Visible)
             TxtScanPhase.Text = s.ScanPreparing;
+        UpdateGuiUpdateUI();
+        RebuildGuiReleasesList();
     }
 
     private void CmbProto_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1674,6 +2318,7 @@ public partial class MainWindow : FluentWindow
 
     private void CleanupAll()
     {
+        try { _guiDownloadCts?.Cancel(); } catch { }
         if (!_isInitializing)
         {
             SyncAwg31FromUI();
@@ -1690,6 +2335,26 @@ public partial class MainWindow : FluentWindow
         }
         _trayIconHandle?.Dispose();
         _trayIconHandle = null;
+
+        if (!_guiUpdateLaunched &&
+            _settings.AutoUpdateGui &&
+            _stagedGuiUpdate != null &&
+            GuiUpdateService.TryParseVersion(_stagedGuiUpdate.VersionString, out var stagedVer) &&
+            stagedVer > _guiCurrentVersion &&
+            File.Exists(_stagedGuiUpdate.FilePath) &&
+            GuiUpdateService.IsSelfUpdateSupported())
+        {
+            _guiUpdateLaunched = true;
+            try
+            {
+                GuiUpdateService.LaunchApplyUpdate(
+                    Environment.ProcessPath!,
+                    _stagedGuiUpdate.FilePath,
+                    relaunch: false,
+                    allowElevation: false);
+            }
+            catch { }
+        }
     }
 
     internal static List<string> SplitCliArgs(string? input)

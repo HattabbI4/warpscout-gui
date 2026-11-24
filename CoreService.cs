@@ -14,7 +14,7 @@ public static class CoreService
     public const string CoreGithubRepo = "vernette/warpscout";
     internal const string GithubLatestApi = $"https://api.github.com/repos/{CoreGithubRepo}/releases/latest";
 
-    private static readonly HttpClient Http = CreateHttpClient();
+    internal static readonly HttpClient Http = CreateHttpClient();
     private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
 
     private static HttpClient CreateHttpClient()
@@ -167,22 +167,8 @@ public static class CoreService
         return TryParseCoreVersion(installedVersion, out var ver) && ver < new Version(0, 17);
     }
 
-    internal static bool TryParseCoreVersion(string? raw, out Version version)
-    {
-        version = new Version(0, 0);
-        if (string.IsNullOrWhiteSpace(raw))
-            return false;
-
-        var s = raw.Trim().TrimStart('v', 'V');
-        var end = s.IndexOfAny(['-', '+', ' ', '\t']);
-        if (end >= 0)
-            s = s[..end];
-
-        if (!Version.TryParse(s, out var parsed) || parsed == null)
-            return false;
-        version = parsed;
-        return true;
-    }
+    internal static bool TryParseCoreVersion(string? raw, out Version version) =>
+        GuiUpdateService.TryParseVersion(raw, out version);
 
     public static async Task<string> GetCoreVersionAsync(string corePath)
     {

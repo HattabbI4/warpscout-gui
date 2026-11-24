@@ -333,4 +333,98 @@ public sealed class Strings : INotifyPropertyChanged
     public string SocksBannerText(string ep, string proto) => T(
         $"SOCKS5 активен: 127.0.0.1:1080 → {ep} ({proto})",
         $"SOCKS5 active: 127.0.0.1:1080 → {ep} ({proto})");
+
+    // GUI Auto-Update & Version Manager
+    public string GuiBannerAvailable(string tag) => T(
+        $"Доступна новая версия Warpscout GUI {tag}",
+        $"New Warpscout GUI {tag} is available");
+    public string GuiBannerDownloading(string tag, int pct) => T(
+        $"Доступна новая версия Warpscout GUI {tag} · Скачивание ({pct}%)",
+        $"New Warpscout GUI {tag} is available · Downloading ({pct}%)");
+    public string GuiBannerReady(string tag) => T(
+        $"Обновление Warpscout GUI {tag} готово к установке",
+        $"Warpscout GUI {tag} update is ready to install");
+    public string GuiBannerActionHint => T(
+        "Нажмите, чтобы перейти в Настройки и посмотреть изменения",
+        "Click to open Settings and view changelog");
+    public string GuiBannerReadyHint => T(
+        "Установится при выходе или нажмите, чтобы обновить сейчас",
+        "Installs on exit, or click to update now");
+
+    public string GuiUpdateSectionHeader => T("Обновление приложения (Warpscout GUI)", "Application Updates (Warpscout GUI)");
+    public string GuiUpdateCurrentTitle(string ver, string variant) => $"Warpscout GUI v{ver} ({variant})";
+    public string GuiUpdateStatusIdle => T("Проверка обновлений ещё не выполнялась", "Updates have not been checked yet");
+    public string GuiUpdateStatusChecking => T("Проверка обновлений на GitHub...", "Checking GitHub for updates...");
+    public string GuiUpdateStatusUpToDate => T("Установлена актуальная версия", "You are using the latest version");
+    public string GuiUpdateStatusAvailable(string tag) => T($"Доступна новая версия {tag}", $"New version {tag} is available");
+    public string GuiUpdateStatusDownloading(string tag, string progress) => T($"Скачивание {tag}: {progress}", $"Downloading {tag}: {progress}");
+    public string GuiUpdateStatusReady(string tag, bool autoOnExit = true) => autoOnExit
+        ? T(
+            $"Версия {tag} скачана и готова к установке (по кнопке или при выходе)",
+            $"Version {tag} is downloaded and ready to install (now or on exit)")
+        : T(
+            $"Версия {tag} скачана и готова к установке по кнопке",
+            $"Version {tag} is downloaded and ready to install");
+    public string GuiUpdateStatusError(string msg) => T($"Ошибка обновления: {msg}", $"Update error: {msg}");
+    public string GuiUpdateAutoTitle => T("Автообновление приложения", "Automatic app updates");
+    public string GuiUpdateAutoDesc => T(
+        "Проверять обновления при запуске, скачивать в фоне и устанавливать при выходе или по кнопке",
+        "Check for updates on startup, download in background, and install on exit or manually");
+    public string BtnUpdateTo(string tag) => T($"Обновить до {tag}", $"Update to {tag}");
+    public string BtnRestartAndUpdate => T("Перезапустить и обновить", "Restart & update");
+    public string BtnInstallVersion => T("Обновить", "Update");
+    public string BtnRollback => T("Откатиться", "Rollback");
+    public string GuiVersionsTitle => T("Версии и список изменений", "Versions & Changelog");
+    public string GuiVersionsSubtitle(int count) => count > 0
+        ? T($"Доступно релизов: {count} — просмотр изменений, обновление и откат", $"Available releases: {count} — view changelogs, update, or rollback")
+        : T("Нажмите «Проверить обновления», чтобы загрузить список релизов", "Click «Check updates» to load available releases");
+    public string GuiVersionsEmpty => T("Список релизов пока пуст — нажмите «Проверить обновления»", "No releases loaded yet — click «Check updates»");
+    public string GuiBadgeCurrent => T("Текущая", "Current");
+    public string GuiBadgeLatest => T("Последняя", "Latest");
+    public string GuiBadgeReady => T("Готово", "Ready");
+    public string GuiViewOnly => T("Только просмотр", "View only");
+    public string GuiViewOnlyTooltip => T(
+        "Откат на версии ниже 0.5.0 отключён, так как в них нет встроенного автообновления",
+        "Rollback below 0.5.0 is disabled because those builds do not include the built-in updater");
+    public string GuiNoChangelog => T("Описание изменений отсутствует.", "No changelog notes available.");
+    public string BtnShowChanges => T("Изменения", "Changes");
+    public string BtnHideChanges => T("Скрыть", "Hide");
+    public string GuiDevModeNotSupported => T(
+        "Самообновление доступно только в собранном single-file .exe (не в режиме dotnet run / Debug).",
+        "Self-update is only supported in published single-file .exe builds (not in dotnet run / Debug).");
+
+    public string GuiConfirmUpdateTitle(string tag) => T($"Обновить Warpscout GUI до {tag}?", $"Update Warpscout GUI to {tag}?");
+    public string GuiConfirmRollbackTitle(string tag) => T($"Откатить Warpscout GUI до {tag}?", $"Rollback Warpscout GUI to {tag}?");
+    public string GuiConfirmBody(string currentTag, string targetTag) => T(
+        $"Приложение перейдёт с {currentTag} на {targetTag} и перезапустится. Настройки, ключ WARP и ядро warpscout.exe сохранятся.",
+        $"The application will switch from {currentTag} to {targetTag} and restart. Settings, WARP key, and warpscout.exe core are preserved.");
+    public string GuiConfirmActiveProcesses => T(
+        "Сейчас запущено сканирование или SOCKS5-прокси — перед перезапуском они будут остановлены.",
+        "A scan or SOCKS5 proxy is currently running and will be stopped before restarting.");
+    public string BtnApplyAndRestart => T("Установить и перезапустить", "Install & restart");
+
+    public string GuiDownloadProgressWithTotal(long read, long total) => T(
+        $"{read / 1048576.0:0.1} / {total / 1048576.0:0.1} МБ ({100.0 * read / total:0}%)",
+        $"{read / 1048576.0:0.1} / {total / 1048576.0:0.1} MB ({100.0 * read / total:0}%)");
+    public string GuiDownloadProgressNoTotal(long read) => T(
+        $"{read / 1048576.0:0.1} МБ",
+        $"{read / 1048576.0:0.1} MB");
+    public string GuiAssetSizeMb(long bytes) => T($"{bytes / 1048576.0:0.1} МБ", $"{bytes / 1048576.0:0.1} MB");
+    public string GuiReleaseDate(DateTimeOffset dt) =>
+        dt.ToLocalTime().ToString(_en ? "yyyy-MM-dd" : "dd.MM.yyyy", CultureInfo.InvariantCulture);
+    public string GuiErrInvalidExe => T(
+        "Скачанный файл не является корректным исполняемым файлом Windows (.exe).",
+        "Downloaded file is not a valid Windows executable (.exe).");
+    public string GuiErrSizeMismatch(long actual, long expected) => T(
+        $"Размер файла не совпадает ({actual} вместо {expected} байт).",
+        $"Downloaded file size mismatch ({actual} vs {expected} bytes).");
+    public string GuiErrHashMismatch => T(
+        "Контрольная сумма SHA-256 скачанного файла не совпадает с релизом GitHub.",
+        "Downloaded file SHA-256 checksum does not match the GitHub release.");
+    public string GuiErrUacCancelled => T(
+        "Обновление отменено (требуются права администратора для замены файла).",
+        "Update cancelled (administrator rights are required to replace the executable).");
+    public string GuiErrDownload(int code) => T(
+        $"Ошибка скачивания обновления: HTTP {code}",
+        $"Update download failed: HTTP {code}");
 }

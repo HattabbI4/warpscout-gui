@@ -1023,4 +1023,312 @@ public sealed class WarpscoutTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(s.Awg31DisableCookiesTitle));
         Assert.False(string.IsNullOrWhiteSpace(s.Awg31TimingsHeader));
     }
+
+    // --- GuiUpdateService tests ---
+
+    [Theory]
+    [InlineData("v0.5.0", true, "0.5.0")]
+    [InlineData("0.5.0+abc123", true, "0.5.0")]
+    [InlineData("v0.5.0-rc1", true, "0.5.0")]
+    [InlineData("0.5", true, "0.5.0")]
+    [InlineData("0.4.0.0", true, "0.4.0")]
+    [InlineData("", false, "0.0.0")]
+    [InlineData("not-a-version", false, "0.0.0")]
+    public void TryParseVersion_NormalizesTagsAndRejectsInvalid(string raw, bool expectedOk, string expectedVer)
+    {
+        var ok = GuiUpdateService.TryParseVersion(raw, out var ver);
+        Assert.Equal(expectedOk, ok);
+        Assert.Equal(expectedVer, ver.ToString(3));
+    }
+
+    [Fact]
+    public void ExtractChangelog_SelectsLanguageAllFallbackAndLegacyCommits()
+    {
+        const string bilingualBody = """
+            <!-- changelog:ru -->
+            ## Что нового
+
+            ### ✨ Новое
+            - Добавлено **автообновление**
+            <!-- /changelog:ru -->
+
+            ---
+
+            <!-- changelog:en -->
+            ## What's New
+
+            ### ✨ New
+            - Added **auto-update**
+            <!-- /changelog:en -->
+
+            ## Скачать / Download
+            - [exe](https://example.com)
+            """;
+
+        var ru = GuiUpdateService.ExtractChangelog(bilingualBody, "ru");
+        Assert.Contains("Добавлено **автообновление**", ru);
+        Assert.DoesNotContain("## Что нового", ru);
+        Assert.DoesNotContain("Added **auto-update**", ru);
+
+        var en = GuiUpdateService.ExtractChangelog(bilingualBody, "en");
+        Assert.Contains("Added **auto-update**", en);
+        Assert.DoesNotContain("## What's New", en);
+
+        const string allBody = "<!-- changelog:all -->\n- Unified change\n<!-- /changelog:all -->";
+        Assert.Equal("- Unified change", GuiUpdateService.ExtractChangelog(allBody, "ru"));
+        Assert.Equal("- Unified change", GuiUpdateService.ExtractChangelog(allBody, "en"));
+
+        const string ruOnlyBody = "<!-- changelog:ru -->\n- Только русский\n<!-- /changelog:ru -->";
+        Assert.Equal("- Только русский", GuiUpdateService.ExtractChangelog(ruOnlyBody, "en"));
+
+        const string legacyBody = """
+            ## Скачать
+
+            - [warpscout-gui_0.3.0_windows_amd64_standalone.exe](https://example.com)
+
+            ## Commits
+
+            - feat: persist last scan results ([`c5f1e1b`](https://github.com/HattabbI4/warpscout-gui/commit/c5f1e1b))
+            - fix: handle [corner](https://example.com) case
+
+            **Full Changelog**: https://github.com/HattabbI4/warpscout-gui/compare/v0.2.1...v0.3.0
+            """;
+        var legacy = GuiUpdateService.ExtractChangelog(legacyBody, "ru");
+        Assert.Equal("- feat: persist last scan results\n- fix: handle corner case", legacy);
+
+        Assert.Equal("", GuiUpdateService.ExtractChangelog("", "ru"));
+    }
+
+    [Fact]
+    public void ParseReleasesJson_FiltersDraftPrereleasePicksVariantAndSorts()
+    {
+        const string json = """
+            [
+              {
+                "tag_name": "v0.6.0-beta1",
+                "draft": false,
+                "prerelease": true,
+                "published_at": "2026-11-26T00:00:00Z",
+                "assets": [
+                  { "name": "warpscout-gui_0.6.0-beta1_windows_amd64_standalone.exe", "browser_download_url": "https://dl/pre.exe", "size": 100 }
+                ]
+              },
+              {
+                "tag_name": "v0.7.0",
+                "draft": true,
+                "prerelease": false,
+                "published_at": "2026-11-27T00:00:00Z",
+                "assets": [
+                  { "name": "warpscout-gui_0.7.0_windows_amd64_standalone.exe", "browser_download_url": "https://dl/draft.exe", "size": 100 }
+                ]
+              },
+              {
+                "tag_name": "v0.4.0",
+                "draft": false,
+                "prerelease": false,
+                "published_at": "2026-11-24T00:00:00Z",
+                "body": "notes 0.4.0",
+                "assets": [
+                  { "name": "warpscout-gui_0.4.0_windows_amd64_lite.exe", "browser_download_url": "https://dl/040-lite.exe", "size": 6000000, "digest": "sha256:AAAA" },
+                  { "name": "warpscout-gui_0.4.0_windows_amd64_standalone.exe", "browser_download_url": "https://dl/040-standalone.exe", "size": 69000000, "digest": "sha256:BBBB" }
+                ]
+              },
+              {
+                "tag_name": "v0.5.0",
+                "draft": false,
+                "prerelease": false,
+                "published_at": "2026-11-25T00:00:00Z",
+                "body": "notes 0.5.0",
+                "assets": [
+                  { "name": "warpscout-gui_0.5.0_windows_amd64_lite.exe", "browser_download_url": "https://dl/050-lite.exe", "size": 6100000, "digest": "sha256:CCCC" },
+                  { "name": "warpscout-gui_0.5.0_windows_amd64_standalone.exe", "browser_download_url": "https://dl/050-standalone.exe", "size": 70000000, "digest": "sha256:DDDD" }
+                ]
+              }
+            ]
+            """;
+
+        var standalone = GuiUpdateService.ParseReleasesJson(json, "standalone");
+        Assert.Equal(2, standalone.Count);
+        Assert.Equal("v0.5.0", standalone[0].TagName);
+        Assert.Equal("https://dl/050-standalone.exe", standalone[0].DownloadUrl);
+        Assert.Equal("dddd", standalone[0].Sha256Hex);
+        Assert.Equal("v0.4.0", standalone[1].TagName);
+
+        var lite = GuiUpdateService.ParseReleasesJson(json, "lite");
+        Assert.Equal(2, lite.Count);
+        Assert.Equal("https://dl/050-lite.exe", lite[0].DownloadUrl);
+        Assert.Equal("cccc", lite[0].Sha256Hex);
+    }
+
+    [Theory]
+    [InlineData("0.4.0", "0.5.0", false)]
+    [InlineData("0.3.0", "0.5.0", false)]
+    [InlineData("0.5.0", "0.5.0", false)]
+    [InlineData("0.5.0", "0.6.0", true)]
+    [InlineData("0.6.0", "0.5.0", true)]
+    public void CanInstallOrRollback_EnforcesMinSelfUpdateVersion050(string targetRaw, string currentRaw, bool expected)
+    {
+        var target = Version.Parse(targetRaw);
+        var current = Version.Parse(currentRaw);
+        Assert.Equal(expected, GuiUpdateService.CanInstallOrRollback(target, current));
+    }
+
+    [Fact]
+    public void VerifyDownloadedExe_ValidatesMzSizeAndSha256()
+    {
+        var goodBytes = new byte[] { (byte)'M', (byte)'Z', 0x90, 0x00, 0x03, 0x00 };
+        var goodHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(goodBytes)).ToLowerInvariant();
+        var goodPath = Path.Combine(_tempDir, "good.exe");
+        File.WriteAllBytes(goodPath, goodBytes);
+
+        GuiUpdateService.VerifyDownloadedExe(goodPath, goodBytes.Length, goodHash);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            GuiUpdateService.VerifyDownloadedExe(goodPath, goodBytes.Length, new string('0', 64)));
+        Assert.Throws<InvalidOperationException>(() =>
+            GuiUpdateService.VerifyDownloadedExe(goodPath, goodBytes.Length + 1, goodHash));
+
+        var badMagicBytes = new byte[] { (byte)'P', (byte)'K', 0x03, 0x04 };
+        var badMagicHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(badMagicBytes));
+        var badMagicPath = Path.Combine(_tempDir, "zip.exe");
+        File.WriteAllBytes(badMagicPath, badMagicBytes);
+        Assert.Throws<InvalidOperationException>(() =>
+            GuiUpdateService.VerifyDownloadedExe(badMagicPath, badMagicBytes.Length, badMagicHash));
+    }
+
+    [Fact]
+    public void BuildApplyScript_EscapesUnicodeSingleQuotesAndRelaunchFlag()
+    {
+        var current = @"C:\Users\Роман\O'Brien\warpscout-gui.exe";
+        var staged = @"C:\Users\Роман\O'Brien\updates\staged-v0.6.0.exe";
+        var meta = @"C:\Users\Роман\O'Brien\updates\staged.json";
+
+        var withRelaunch = GuiUpdateService.BuildApplyScript(1234, current, staged, relaunch: true, meta);
+        Assert.Contains(@"C:\Users\Роман\O''Brien\warpscout-gui.exe", withRelaunch);
+        Assert.Contains("Start-Process -FilePath $current", withRelaunch);
+        Assert.Contains("$pidToWait = 1234", withRelaunch);
+
+        var withoutRelaunch = GuiUpdateService.BuildApplyScript(1234, current, staged, relaunch: false, meta);
+        Assert.DoesNotContain("Start-Process", withoutRelaunch);
+
+        var elevatedRelaunch = GuiUpdateService.BuildApplyScript(1234, current, staged, relaunch: true, meta, elevated: true);
+        Assert.Contains("Start-Process -FilePath 'explorer.exe'", elevatedRelaunch);
+    }
+
+    [Fact]
+    public void LoadCachedReleases_RejectsDifferentBuildVariantAndHydratesMatching()
+    {
+        var cachePath = Path.Combine(_tempDir, "cache.json");
+        var cache = new GuiReleasesCache
+        {
+            ETag = "\"abc\"",
+            BuildVariant = "lite",
+            Releases = [new GuiReleaseInfo { TagName = "v0.6.0", VersionString = "0.6.0", DownloadUrl = "https://dl/lite.exe" }],
+        };
+        File.WriteAllText(cachePath, JsonSerializer.Serialize(cache));
+
+        Assert.Null(GuiUpdateService.LoadCachedReleases("standalone", cachePath));
+
+        var loaded = GuiUpdateService.LoadCachedReleases("lite", cachePath);
+        Assert.NotNull(loaded);
+        Assert.Single(loaded.Releases);
+        Assert.Equal(new Version(0, 6, 0), loaded.Releases[0].Version);
+    }
+
+    [Fact]
+    public void CleanupUpdatesDir_CleansJunkAndPreservesOnlyValidNewerStagedUpdate()
+    {
+        var updatesDir = Path.Combine(_tempDir, "updates");
+        Directory.CreateDirectory(updatesDir);
+        var fakeCurrentExe = Path.Combine(_tempDir, "warpscout-gui.exe");
+        var bakPath = fakeCurrentExe + ".bak";
+        File.WriteAllText(bakPath, "old");
+
+        var partPath = Path.Combine(updatesDir, "warpscout-gui-0.6.0.exe.part");
+        var pendingPath = Path.Combine(updatesDir, "pending-0.5.0.exe");
+        var scriptPath = Path.Combine(updatesDir, "apply-update-123.ps1");
+        var staleStagedPath = Path.Combine(updatesDir, "staged-0.5.0.exe");
+        var validStagedPath = Path.Combine(updatesDir, "staged-0.6.0.exe");
+
+        var validBytes = new byte[] { (byte)'M', (byte)'Z', 0x90, 0x00 };
+        var validHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(validBytes)).ToLowerInvariant();
+        File.WriteAllText(partPath, "part");
+        File.WriteAllText(pendingPath, "pending");
+        File.WriteAllText(scriptPath, "script");
+        File.WriteAllBytes(staleStagedPath, validBytes);
+        File.WriteAllBytes(validStagedPath, validBytes);
+
+        var metaPath = Path.Combine(updatesDir, "staged.json");
+        File.WriteAllText(metaPath, JsonSerializer.Serialize(new StagedGuiUpdate
+        {
+            TagName = "v0.6.0",
+            VersionString = "0.6.0",
+            FilePath = validStagedPath,
+            Sha256Hex = validHash,
+            AssetSize = validBytes.Length,
+        }));
+
+        var active = GuiUpdateService.CleanupUpdatesDir(new Version(0, 5, 0), updatesDir, fakeCurrentExe);
+        Assert.NotNull(active);
+        Assert.Equal("v0.6.0", active.TagName);
+        Assert.False(File.Exists(bakPath));
+        Assert.False(File.Exists(partPath));
+        Assert.False(File.Exists(pendingPath));
+        Assert.False(File.Exists(scriptPath));
+        Assert.False(File.Exists(staleStagedPath));
+        Assert.True(File.Exists(validStagedPath));
+        Assert.True(File.Exists(metaPath));
+
+        var afterUpgrade = GuiUpdateService.CleanupUpdatesDir(new Version(0, 6, 0), updatesDir, fakeCurrentExe);
+        Assert.Null(afterUpgrade);
+        Assert.False(File.Exists(validStagedPath));
+        Assert.False(File.Exists(metaPath));
+    }
+
+    [Fact]
+    public void IsSelfUpdateSupported_ChecksSingleFileAndExecutableName()
+    {
+        var singleDir = Path.Combine(_tempDir, "single");
+        Directory.CreateDirectory(singleDir);
+        var singleExe = Path.Combine(singleDir, "warpscout-gui.exe");
+        File.WriteAllText(singleExe, "mz");
+        Assert.True(GuiUpdateService.IsSelfUpdateSupported(singleExe));
+
+        File.WriteAllText(Path.Combine(singleDir, "warpscout-gui.dll"), "dll");
+        Assert.False(GuiUpdateService.IsSelfUpdateSupported(singleExe));
+
+        var dotnetExe = Path.Combine(_tempDir, "dotnet.exe");
+        File.WriteAllText(dotnetExe, "mz");
+        Assert.False(GuiUpdateService.IsSelfUpdateSupported(dotnetExe));
+    }
+
+    [Fact]
+    public void LoadSettings_DefaultsAutoUpdateGuiToTrueForLegacyJson()
+    {
+        var legacyPath = WriteTempFile("legacy-settings.json", """{"SettingsVersion":2,"Language":"en"}""");
+        var loaded = CoreService.LoadSettings(legacyPath);
+
+        Assert.True(loaded.AutoUpdateGui);
+        Assert.Equal("en", loaded.Language);
+    }
+
+    [Fact]
+    public void Strings_GuiUpdateStringsAreLocalized()
+    {
+        var s = Strings.Instance;
+        s.SetLanguage("ru");
+        var ruHeader = s.GuiUpdateSectionHeader;
+        var ruBanner = s.GuiBannerAvailable("v0.5.0");
+        var ruRollback = s.BtnRollback;
+
+        Assert.False(string.IsNullOrWhiteSpace(ruHeader));
+        Assert.Contains("v0.5.0", ruBanner);
+        Assert.False(string.IsNullOrWhiteSpace(ruRollback));
+
+        s.SetLanguage("en");
+        Assert.NotEqual(ruHeader, s.GuiUpdateSectionHeader);
+        Assert.NotEqual(ruBanner, s.GuiBannerAvailable("v0.5.0"));
+        Assert.NotEqual(ruRollback, s.BtnRollback);
+        Assert.Contains("v0.5.0", s.GuiBannerAvailable("v0.5.0"));
+    }
 }

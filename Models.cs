@@ -153,6 +153,7 @@ public sealed class AppSettings
     public bool MinimizeToTray { get; set; } = false;
     public bool MinimizeToTrayWithProxy { get; set; } = true;
     public bool WarnOnCloseWithProxy { get; set; } = false;
+    public bool AutoUpdateGui { get; set; } = true;
     public string DefaultExitAction { get; set; } = "";
     public string CustomScanFlags { get; set; } = "-p awg -P -exclude-node DME";
     public Awg31Options Awg31 { get; set; } = new();

@@ -190,11 +190,19 @@
                     <Grid>
                         <Border x:Name="IndSettings" Width="3" Height="16" CornerRadius="2"
                                 Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Center" />
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="13,0,12,0">
-                            <ui:SymbolIcon x:Name="IconSettings" Symbol="Settings24" FontSize="18" Foreground="#D1D5DB" />
-                            <TextBlock x:Name="TxtNavSettings" Text="{Binding NavSettings, Source={x:Static local:Strings.Instance}}" FontSize="13.5"
-                                       Foreground="#E5E7EB" VerticalAlignment="Center" Margin="12,0,0,0" />
-                        </StackPanel>
+                        <Grid Margin="13,0,12,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <ui:SymbolIcon x:Name="IconSettings" Symbol="Settings24" FontSize="18" Foreground="#D1D5DB" />
+                                <TextBlock x:Name="TxtNavSettings" Text="{Binding NavSettings, Source={x:Static local:Strings.Instance}}" FontSize="13.5"
+                                           Foreground="#E5E7EB" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            </StackPanel>
+                            <Ellipse x:Name="NavSettingsUpdateDot" Grid.Column="1" Width="7" Height="7"
+                                     Fill="#60CDFF" Visibility="Collapsed" VerticalAlignment="Center" />
+                        </Grid>
                     </Grid>
                 </Button>
             </Grid>
@@ -305,6 +313,34 @@
                         <StackPanel Margin="0,0,0,42">
                             <TextBlock x:Name="TxtScannerPageTitle" Text="{Binding ScannerTitle, Source={x:Static local:Strings.Instance}}" FontSize="26" FontWeight="SemiBold"
                                        Foreground="White" Margin="0,0,0,14" />
+
+                            <!-- GUI Update Notification Banner -->
+                            <Border x:Name="GuiUpdateBanner"
+                                    Visibility="Collapsed"
+                                    Background="#1A0078D4"
+                                    BorderBrush="#660078D4"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="14,10"
+                                    Margin="0,0,0,10"
+                                    Cursor="Hand"
+                                    MouseLeftButtonUp="GuiUpdateBanner_Click">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="18" Foreground="#60CDFF"
+                                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <TextBlock x:Name="TxtGuiBannerTitle" FontSize="13" FontWeight="SemiBold" Foreground="White" />
+                                        <TextBlock x:Name="TxtGuiBannerSub" FontSize="11.5" Foreground="#93C5FD" Margin="0,1,0,0" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="2" Content="✕" Appearance="Transparent" Padding="8,4"
+                                               VerticalAlignment="Center" Click="BtnDismissGuiBanner_Click" />
+                                </Grid>
+                            </Border>
 
                             <!-- Hero Card (Win11 Settings / MagicPods style) -->
                             <Border Background="#14FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1"
@@ -882,6 +918,81 @@
                                 </StackPanel>
                             </StackPanel>
 
+                            <TextBlock Text="{Binding GuiUpdateSectionHeader, Source={x:Static local:Strings.Instance}}" FontSize="13.5" FontWeight="SemiBold"
+                                       Foreground="#E5E7EB" Margin="2,4,0,8" />
+
+                            <ui:CardControl Icon="{ui:SymbolIcon ArrowSync24}" Margin="0,0,0,4">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock x:Name="TxtGuiCurrentVersion" FontSize="13.5" FontWeight="Medium" Foreground="White" />
+                                        <TextBlock x:Name="TxtGuiUpdateStatus" FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:Button x:Name="BtnCheckGuiUpdates"
+                                               Content="{Binding BtnCheckUpdates, Source={x:Static local:Strings.Instance}}"
+                                               Icon="{ui:SymbolIcon ArrowSync24}"
+                                               Appearance="Secondary"
+                                               Click="BtnCheckGuiUpdates_Click" />
+                                    <ui:Button x:Name="BtnPrimaryGuiUpdate"
+                                               Visibility="Collapsed"
+                                               Icon="{ui:SymbolIcon ArrowDownload24}"
+                                               Appearance="Primary"
+                                               Margin="8,0,0,0"
+                                               Click="BtnPrimaryGuiUpdate_Click" />
+                                    <ui:Button x:Name="BtnCancelGuiDownload"
+                                               Visibility="Collapsed"
+                                               Content="{Binding BtnCancel, Source={x:Static local:Strings.Instance}}"
+                                               Appearance="Secondary"
+                                               Margin="8,0,0,0"
+                                               Click="BtnCancelGuiDownload_Click" />
+                                </StackPanel>
+                            </ui:CardControl>
+
+                            <Border x:Name="GuiDownloadProgressCard"
+                                    Visibility="Collapsed"
+                                    Background="#140078D4"
+                                    BorderBrush="#440078D4"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12,8"
+                                    Margin="0,0,0,4">
+                                <StackPanel>
+                                    <TextBlock x:Name="TxtGuiDownloadStatus" FontSize="11.5" Foreground="#E5E7EB" Margin="0,0,0,6" />
+                                    <ProgressBar x:Name="PbGuiDownload" Height="5" Minimum="0" Maximum="100" Value="0" />
+                                </StackPanel>
+                            </Border>
+
+                            <ui:CardControl Icon="{ui:SymbolIcon Options24}" Margin="0,0,0,4">
+                                <ui:CardControl.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding GuiUpdateAutoTitle, Source={x:Static local:Strings.Instance}}" FontSize="13.5" FontWeight="Medium" Foreground="White" />
+                                        <TextBlock Text="{Binding GuiUpdateAutoDesc, Source={x:Static local:Strings.Instance}}" FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </ui:CardControl.Header>
+                                <ui:ToggleSwitch x:Name="TglAutoUpdateGui" IsChecked="True"
+                                                 Checked="SettingsToggle_Changed" Unchecked="SettingsToggle_Changed" />
+                            </ui:CardControl>
+
+                            <ui:CardExpander x:Name="CardGuiVersions"
+                                             Icon="{ui:SymbolIcon Clock24}"
+                                             IsExpanded="False"
+                                             ContentPadding="14,10"
+                                             Margin="0,0,0,14">
+                                <ui:CardExpander.Header>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding GuiVersionsTitle, Source={x:Static local:Strings.Instance}}" FontSize="13.5" FontWeight="Medium" Foreground="White" />
+                                        <TextBlock x:Name="TxtGuiVersionsDesc" FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </ui:CardExpander.Header>
+                                <StackPanel>
+                                    <TextBlock x:Name="TxtGuiReleasesEmpty"
+                                               Text="{Binding GuiVersionsEmpty, Source={x:Static local:Strings.Instance}}"
+                                               FontSize="12" Foreground="#9CA3AF" />
+                                    <StackPanel x:Name="GuiReleasesHost" />
+                                </StackPanel>
+                            </ui:CardExpander>
+
                             <TextBlock Text="{Binding CoreSectionHeader, Source={x:Static local:Strings.Instance}}" FontSize="13.5" FontWeight="SemiBold"
                                        Foreground="#E5E7EB" Margin="2,4,0,8" />
 
@@ -1114,6 +1225,46 @@
                 </Path.Effect>
             </Path>
         </Canvas>
+
+        <!-- GUI Update / Rollback Confirmation Modal -->
+        <Grid x:Name="GuiUpdateConfirmOverlay"
+              Grid.RowSpan="2"
+              Background="#AA000000"
+              Visibility="Collapsed">
+            <Border Background="#202020"
+                    BorderBrush="#383838"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Width="460"
+                    Padding="22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="TxtGuiConfirmTitle"
+                               FontSize="16" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8" TextWrapping="Wrap" />
+                    <TextBlock x:Name="TxtGuiConfirmBody"
+                               FontSize="13" Foreground="#D1D5DB" TextWrapping="Wrap" Margin="0,0,0,12" />
+                    <Border x:Name="GuiConfirmWarningBox"
+                            Visibility="Collapsed"
+                            Background="#26F59E0B"
+                            BorderBrush="#66F59E0B"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10,8"
+                            Margin="0,0,0,14">
+                        <TextBlock x:Name="TxtGuiConfirmWarning"
+                                   Text="{Binding GuiConfirmActiveProcesses, Source={x:Static local:Strings.Instance}}"
+                                   FontSize="12" Foreground="#FDE68A" TextWrapping="Wrap" />
+                    </Border>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <ui:Button Content="{Binding BtnCancel, Source={x:Static local:Strings.Instance}}" Appearance="Transparent" Margin="0,0,8,0"
+                                   Click="BtnGuiConfirmCancel_Click" />
+                        <ui:Button Content="{Binding BtnApplyAndRestart, Source={x:Static local:Strings.Instance}}" Appearance="Primary"
+                                   Click="BtnGuiConfirmOk_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
 
         <!-- Exit Warning Modal Dialog -->
         <Grid x:Name="ExitWarningOverlay"

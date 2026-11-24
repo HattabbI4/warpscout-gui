@@ -34,4 +34,14 @@
   <ItemGroup>
     <InternalsVisibleTo Include="WarpscoutGui.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition="'$(SelfContained)' == 'true'">
+      <_Parameter1>BuildVariant</_Parameter1>
+      <_Parameter2>standalone</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition="'$(SelfContained)' != 'true'">
+      <_Parameter1>BuildVariant</_Parameter1>
+      <_Parameter2>lite</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>
