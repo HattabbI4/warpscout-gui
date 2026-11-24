@@ -837,4 +837,190 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Equal("Done: 5 working servers, torn: 2, best: 162.159.192.1:2408", s.LogScanDone(5, "162.159.192.1:2408", 2));
         Assert.Equal("Done: 5 working servers, best: 162.159.192.1:2408", s.LogScanDone(5, "162.159.192.1:2408"));
     }
+
+    // --- AmneziaWG 3.1 tests ---
+
+    [Fact]
+    public void ExportConfig_AmneziaWg31_IncludesBaseAnd31ParamsAndValidatesRanges()
+    {
+        var accPath = WriteValidAccount(includeMasque: false, ipv4: "172.16.0.12");
+
+        var defaultConf = CoreService.ExportConfig(accPath, "162.159.192.3:2408", "awg31", new Awg31Options());
+        Assert.Contains("Jc = 6", defaultConf);
+        Assert.Contains("Jmin = 10", defaultConf);
+        Assert.Contains("Jmax = 50", defaultConf);
+        Assert.Contains("I1 = <r 2>", defaultConf);
+        Assert.DoesNotContain("ContentPaddingAddition", defaultConf);
+        Assert.DoesNotContain("DisableCookies", defaultConf);
+        Assert.DoesNotContain("RandomTrailers", defaultConf);
+
+        var opts = new Awg31Options
+        {
+            Padding = "16-128",
+            RekeyAfter = "120",
+            RekeyTimeout = "5",
+            RejectAfter = "180",
+            KeepaliveTimeout = "10",
+            MaxHandshakes = "18",
+            DisableCookies = true,
+            RandomTrailers = true,
+        };
+        var fullConf = CoreService.ExportConfig(accPath, "162.159.192.3:2408", "awg31", opts);
+        Assert.Contains("Jc = 6", fullConf);
+        Assert.Contains("ContentPaddingAddition = 16-128", fullConf);
+        Assert.Contains("RekeyAfterTime = 120", fullConf);
+        Assert.Contains("RekeyTimeout = 5", fullConf);
+        Assert.Contains("RejectAfterTime = 180", fullConf);
+        Assert.Contains("KeepaliveTimeout = 10", fullConf);
+        Assert.Contains("MaxHandshakeAttempts = 18", fullConf);
+        Assert.Contains("DisableCookies = on", fullConf);
+        Assert.Contains("RandomTrailers = on", fullConf);
+        Assert.DoesNotContain("= true", fullConf);
+
+        var invalidOpts = new Awg31Options { Padding = "128-16" };
+        Assert.Throws<InvalidOperationException>(() =>
+            CoreService.ExportConfig(accPath, "162.159.192.3:2408", "awg31", invalidOpts));
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("   ", true)]
+    [InlineData("0", true)]
+    [InlineData("64", true)]
+    [InlineData(" 16-128 ", true)]
+    [InlineData("50-50", true)]
+    [InlineData("128-16", false)]
+    [InlineData("-1", false)]
+    [InlineData("abc", false)]
+    [InlineData("10-", false)]
+    [InlineData("-10", false)]
+    [InlineData("1-2-3", false)]
+    [InlineData("10 - 20", false)]
+    public void Awg31Options_IsValidRange_ValidatesSingleAndRangeFormats(string? raw, bool expected)
+    {
+        Assert.Equal(expected, Awg31Options.IsValidRange(raw));
+    }
+
+    [Fact]
+    public void Awg31Options_FindInvalidAppendCliFormatSummaryAndParseRoundTrip()
+    {
+        var valid = new Awg31Options
+        {
+            Padding = " 16-128 ",
+            RekeyAfter = "120",
+            KeepaliveTimeout = "10-20",
+            RandomTrailers = true,
+            DisableCookies = true,
+        };
+        Assert.Null(valid.FindFirstInvalidRange());
+
+        var cli = new List<string>();
+        valid.AppendCliArgs(cli);
+        Assert.Equal(
+            ["-padding", "16-128", "-rekey-after", "120", "-keepalive-timeout", "10-20", "-disable-cookies", "-random-trailers"],
+            cli);
+
+        var summary = valid.FormatSummaryParts();
+        Assert.Equal(
+            ["padding 16-128", "rekey-after 120", "keepalive-timeout 10-20", "random-trailers", "disable-cookies"],
+            summary);
+
+        var parsed = Awg31Options.ParseFromCliArgs(
+            ["scan", "-p", "awg31", "--padding=16-128", "-rekey-after", "120", "-rekey-timeout=5", "-reject-after", "180", "--keepalive-timeout", "10-20", "-max-handshakes", "18", "-disable-cookies", "-random-trailers=1", "-random-trailers=false"],
+            startIdx: 1);
+        Assert.Equal("16-128", parsed.Padding);
+        Assert.Equal("120", parsed.RekeyAfter);
+        Assert.Equal("5", parsed.RekeyTimeout);
+        Assert.Equal("180", parsed.RejectAfter);
+        Assert.Equal("10-20", parsed.KeepaliveTimeout);
+        Assert.Equal("18", parsed.MaxHandshakes);
+        Assert.True(parsed.DisableCookies);
+        Assert.False(parsed.RandomTrailers);
+
+        var dangling = Awg31Options.ParseFromCliArgs(["-padding", "-P", "-random-trailers"]);
+        Assert.Equal("", dangling.Padding);
+        Assert.True(dangling.RandomTrailers);
+
+        var bad = new Awg31Options { Padding = "16-64", RejectAfter = " 200-100 " };
+        var err = bad.FindFirstInvalidRange();
+        Assert.NotNull(err);
+        Assert.Equal("-reject-after", err.Value.Flag);
+        Assert.Equal("200-100", err.Value.Value);
+    }
+
+    [Fact]
+    public void AppSettings_RoundTripsAwg31OptionsAndDefaultsNull()
+    {
+        var settingsPath = Path.Combine(_tempDir, "awg31-settings.json");
+        File.WriteAllText(settingsPath, """{"SettingsVersion":2,"Awg31":null}""");
+        var loadedSettings = CoreService.LoadSettings(settingsPath);
+        Assert.NotNull(loadedSettings.Awg31);
+
+        loadedSettings.Awg31.Padding = "16-128";
+        loadedSettings.Awg31.RekeyAfter = "120";
+        loadedSettings.Awg31.RandomTrailers = true;
+        CoreService.SaveSettings(loadedSettings, settingsPath);
+
+        var reloaded = CoreService.LoadSettings(settingsPath);
+        Assert.Equal("16-128", reloaded.Awg31.Padding);
+        Assert.Equal("120", reloaded.Awg31.RekeyAfter);
+        Assert.True(reloaded.Awg31.RandomTrailers);
+        Assert.False(reloaded.Awg31.DisableCookies);
+    }
+
+    [Fact]
+    public void ShouldAutoUpgradeCore_UpgradesDefaultCoreBelow0170_AndPreservesCustomOrCurrent()
+    {
+        var upstreamSettings = new AppSettings { CoreRepo = CoreService.CoreGithubRepo };
+
+        Assert.True(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "v0.16.1"));
+        Assert.True(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "0.16.9"));
+        Assert.True(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "0.16"));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "v0.17"));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "v0.17.0"));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "v0.17.1-rc1"));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, upstreamSettings, "dev"));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(@"C:\custom\warpscout.exe", upstreamSettings, "v0.16.1"));
+    }
+
+    [Fact]
+    public void Strings_Awg31StringsAreLocalized()
+    {
+        var s = Strings.Instance;
+
+        s.SetLanguage("ru");
+        var ruTitle = s.Awg31CardTitle;
+        var ruErr = s.Awg31InvalidRangeErr("-padding", "bad");
+        var ruPaddingPh = s.Awg31PaddingPlaceholder;
+        var ruRekeyPh = s.Awg31RekeyAfterPlaceholder;
+        Assert.False(string.IsNullOrWhiteSpace(ruTitle));
+        Assert.Contains("-padding", ruErr);
+        Assert.Contains("awg31", s.AdvFlagsExamples);
+        Assert.False(string.IsNullOrWhiteSpace(s.Awg31CardActiveDesc("padding 16-128")));
+        Assert.Contains("16-128", ruPaddingPh);
+        Assert.Contains("120", ruRekeyPh);
+        Assert.Contains("180", s.Awg31RejectAfterPlaceholder);
+        Assert.Contains("5", s.Awg31RekeyTimeoutPlaceholder);
+        Assert.Contains("10", s.Awg31KeepaliveTimeoutPlaceholder);
+        Assert.Contains("18", s.Awg31MaxHandshakesPlaceholder);
+
+        s.SetLanguage("en");
+        Assert.NotEqual(ruTitle, s.Awg31CardTitle);
+        Assert.NotEqual(ruErr, s.Awg31InvalidRangeErr("-padding", "bad"));
+        Assert.NotEqual(ruPaddingPh, s.Awg31PaddingPlaceholder);
+        Assert.NotEqual(ruRekeyPh, s.Awg31RekeyAfterPlaceholder);
+        Assert.Contains("16-128", s.Awg31PaddingPlaceholder);
+        Assert.Contains("120", s.Awg31RekeyAfterPlaceholder);
+        Assert.Contains("180", s.Awg31RejectAfterPlaceholder);
+        Assert.Contains("5", s.Awg31RekeyTimeoutPlaceholder);
+        Assert.Contains("10", s.Awg31KeepaliveTimeoutPlaceholder);
+        Assert.Contains("18", s.Awg31MaxHandshakesPlaceholder);
+        Assert.Contains("awg31", s.AdvFlagsExamples);
+        Assert.Contains("padding 16-128", s.Awg31CardActiveDesc("padding 16-128"));
+        Assert.False(string.IsNullOrWhiteSpace(s.Awg31PaddingTitle));
+        Assert.False(string.IsNullOrWhiteSpace(s.Awg31RandomTrailersTitle));
+        Assert.False(string.IsNullOrWhiteSpace(s.Awg31DisableCookiesTitle));
+        Assert.False(string.IsNullOrWhiteSpace(s.Awg31TimingsHeader));
+    }
 }

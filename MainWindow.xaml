@@ -444,11 +444,162 @@
                                     </ui:CardControl.Header>
                                     <ComboBox x:Name="CmbProto" Width="200" SelectedIndex="0" SelectionChanged="CmbProto_SelectionChanged">
                                         <ComboBoxItem Tag="awg" Content="AmneziaWG" />
+                                        <ComboBoxItem Tag="awg31" Content="AmneziaWG 3.1" />
                                         <ComboBoxItem Tag="wg" Content="WireGuard" />
                                         <ComboBoxItem Tag="masque" Content="MASQUE (QUIC)" />
                                         <ComboBoxItem Tag="masque-h2" Content="MASQUE H2 (TCP)" />
                                     </ComboBox>
                                 </ui:CardControl>
+
+                                <!-- AmneziaWG 3.1 Parameters (shown only when awg31 is selected) -->
+                                <ui:CardExpander x:Name="CardAwg31"
+                                                 Icon="{ui:SymbolIcon Options24}"
+                                                 Visibility="Collapsed"
+                                                 IsExpanded="True"
+                                                 ContentPadding="16,12"
+                                                 Margin="0,0,0,4">
+                                    <ui:CardExpander.Header>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Awg31CardTitle, Source={x:Static local:Strings.Instance}}"
+                                                       FontSize="13.5" FontWeight="Medium" Foreground="White" />
+                                            <TextBlock x:Name="TxtAwg31CardDesc"
+                                                       Text="{Binding Awg31CardDefaultDesc, Source={x:Static local:Strings.Instance}}"
+                                                       FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </ui:CardExpander.Header>
+                                    <StackPanel>
+                                        <!-- Padding -->
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <TextBlock Text="{Binding Awg31PaddingTitle, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="13" FontWeight="Medium" Foreground="White" />
+                                                <TextBlock Text="{Binding Awg31PaddingDesc, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ui:TextBox x:Name="TxtAwg31Padding"
+                                                        Grid.Column="1"
+                                                        Width="155"
+                                                        PlaceholderText="{Binding Awg31PaddingPlaceholder, Source={x:Static local:Strings.Instance}}"
+                                                        FontFamily="Consolas"
+                                                        VerticalAlignment="Center"
+                                                        TextChanged="Awg31Option_TextChanged"
+                                                        LostFocus="Awg31Option_LostFocus" />
+                                        </Grid>
+
+                                        <!-- Random Trailers -->
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <TextBlock Text="{Binding Awg31RandomTrailersTitle, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="13" FontWeight="Medium" Foreground="White" />
+                                                <TextBlock Text="{Binding Awg31RandomTrailersDesc, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ui:ToggleSwitch x:Name="ChkAwg31RandomTrailers"
+                                                             Grid.Column="1"
+                                                             IsChecked="False"
+                                                             VerticalAlignment="Center"
+                                                             Checked="Awg31Option_ToggleChanged"
+                                                             Unchecked="Awg31Option_ToggleChanged" />
+                                        </Grid>
+
+                                        <!-- Disable Cookies -->
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <TextBlock Text="{Binding Awg31DisableCookiesTitle, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="13" FontWeight="Medium" Foreground="White" />
+                                                <TextBlock Text="{Binding Awg31DisableCookiesDesc, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ui:ToggleSwitch x:Name="ChkAwg31DisableCookies"
+                                                             Grid.Column="1"
+                                                             IsChecked="False"
+                                                             VerticalAlignment="Center"
+                                                             Checked="Awg31Option_ToggleChanged"
+                                                             Unchecked="Awg31Option_ToggleChanged" />
+                                        </Grid>
+
+                                        <Border BorderBrush="#1AFFFFFF" BorderThickness="0,1,0,0" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="{Binding Awg31TimingsHeader, Source={x:Static local:Strings.Instance}}"
+                                                   FontSize="12" FontWeight="SemiBold" Foreground="#D1D5DB" Margin="0,0,0,8" />
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding Awg31RekeyAfterLabel, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" Margin="0,0,0,4" />
+                                                <ui:TextBox x:Name="TxtAwg31RekeyAfter"
+                                                            PlaceholderText="{Binding Awg31RekeyAfterPlaceholder, Source={x:Static local:Strings.Instance}}"
+                                                            FontFamily="Consolas"
+                                                            TextChanged="Awg31Option_TextChanged"
+                                                            LostFocus="Awg31Option_LostFocus" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding Awg31RejectAfterLabel, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" Margin="0,0,0,4" />
+                                                <ui:TextBox x:Name="TxtAwg31RejectAfter"
+                                                            PlaceholderText="{Binding Awg31RejectAfterPlaceholder, Source={x:Static local:Strings.Instance}}"
+                                                            FontFamily="Consolas"
+                                                            ToolTip="{Binding Awg31RejectAfterTooltip, Source={x:Static local:Strings.Instance}}"
+                                                            TextChanged="Awg31Option_TextChanged"
+                                                            LostFocus="Awg31Option_LostFocus" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding Awg31RekeyTimeoutLabel, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" Margin="0,0,0,4" />
+                                                <ui:TextBox x:Name="TxtAwg31RekeyTimeout"
+                                                            PlaceholderText="{Binding Awg31RekeyTimeoutPlaceholder, Source={x:Static local:Strings.Instance}}"
+                                                            FontFamily="Consolas"
+                                                            TextChanged="Awg31Option_TextChanged"
+                                                            LostFocus="Awg31Option_LostFocus" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding Awg31KeepaliveTimeoutLabel, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" Margin="0,0,0,4" />
+                                                <ui:TextBox x:Name="TxtAwg31KeepaliveTimeout"
+                                                            PlaceholderText="{Binding Awg31KeepaliveTimeoutPlaceholder, Source={x:Static local:Strings.Instance}}"
+                                                            FontFamily="Consolas"
+                                                            TextChanged="Awg31Option_TextChanged"
+                                                            LostFocus="Awg31Option_LostFocus" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                                <TextBlock Text="{Binding Awg31MaxHandshakesLabel, Source={x:Static local:Strings.Instance}}"
+                                                           FontSize="11.5" Foreground="#9CA3AF" Margin="0,0,0,4" />
+                                                <ui:TextBox x:Name="TxtAwg31MaxHandshakes"
+                                                            PlaceholderText="{Binding Awg31MaxHandshakesPlaceholder, Source={x:Static local:Strings.Instance}}"
+                                                            FontFamily="Consolas"
+                                                            TextChanged="Awg31Option_TextChanged"
+                                                            LostFocus="Awg31Option_LostFocus" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </ui:CardExpander>
 
                                 <!-- Exclude Node -->
                                 <ui:CardControl x:Name="CardExcludeNode"

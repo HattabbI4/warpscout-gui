@@ -113,6 +113,16 @@ public partial class MainWindow : FluentWindow
         TglMinimizeToTray.IsChecked = _settings.MinimizeToTray;
         TglMinimizeToTrayWithProxy.IsChecked = _settings.MinimizeToTrayWithProxy;
         TglWarnOnExit.IsChecked = _settings.WarnOnCloseWithProxy;
+
+        var awg31 = _settings.Awg31 ??= new Awg31Options();
+        TxtAwg31Padding.Text = awg31.Padding;
+        TxtAwg31RekeyAfter.Text = awg31.RekeyAfter;
+        TxtAwg31RekeyTimeout.Text = awg31.RekeyTimeout;
+        TxtAwg31RejectAfter.Text = awg31.RejectAfter;
+        TxtAwg31KeepaliveTimeout.Text = awg31.KeepaliveTimeout;
+        TxtAwg31MaxHandshakes.Text = awg31.MaxHandshakes;
+        ChkAwg31DisableCookies.IsChecked = awg31.DisableCookies;
+        ChkAwg31RandomTrailers.IsChecked = awg31.RandomTrailers;
     }
 
     private void LoadLastScanIntoUI()
@@ -277,8 +287,8 @@ public partial class MainWindow : FluentWindow
     {
         await RefreshCoreAndAccountAsync();
 
-        // First-launch or upgrading from the temporary fork build: download upstream core and lock UI.
-        if (CoreService.ShouldAutoUpgradeCore(_corePath, _settings))
+        // First-launch or upgrading from the temporary fork / pre-0.17 core: download upstream core and lock UI.
+        if (CoreService.ShouldAutoUpgradeCore(_corePath, _settings, _coreVersion))
             await DownloadOrUpdateCoreAsync();
     }
 
@@ -753,6 +763,46 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    private Awg31Options GetEffectiveAwg31Options() =>
+        _isAdvancedScanMode
+            ? Awg31Options.ParseFromCliArgs(SplitCliArgs(TxtCustomFlags.Text))
+            : _settings.Awg31;
+
+    private void SyncAwg31FromUI()
+    {
+        var a = _settings.Awg31;
+        a.Padding = TxtAwg31Padding.Text.Trim();
+        a.RekeyAfter = TxtAwg31RekeyAfter.Text.Trim();
+        a.RekeyTimeout = TxtAwg31RekeyTimeout.Text.Trim();
+        a.RejectAfter = TxtAwg31RejectAfter.Text.Trim();
+        a.KeepaliveTimeout = TxtAwg31KeepaliveTimeout.Text.Trim();
+        a.MaxHandshakes = TxtAwg31MaxHandshakes.Text.Trim();
+        a.DisableCookies = ChkAwg31DisableCookies.IsChecked == true;
+        a.RandomTrailers = ChkAwg31RandomTrailers.IsChecked == true;
+    }
+
+    private void Awg31Option_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isInitializing) return;
+        SyncAwg31FromUI();
+        UpdateHeroSubtitle();
+    }
+
+    private void Awg31Option_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing) return;
+        SyncAwg31FromUI();
+        CoreService.SaveSettings(_settings);
+    }
+
+    private void Awg31Option_ToggleChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing) return;
+        SyncAwg31FromUI();
+        UpdateHeroSubtitle();
+        CoreService.SaveSettings(_settings);
+    }
+
     private void ScanOption_Changed(object sender, RoutedEventArgs e)
     {
         if (!_isInitializing)
@@ -813,10 +863,20 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (ChkDme == null || ChkPing == null || ChkFull == null || ChkSpeed == null)
+        if (_settings == null || ChkDme == null || ChkPing == null || ChkFull == null || ChkSpeed == null)
             return;
 
         var isMasque = _selectedProto.StartsWith("masque", StringComparison.OrdinalIgnoreCase);
+        var isAwg31 = string.Equals(_selectedProto, "awg31", StringComparison.OrdinalIgnoreCase);
+        if (CardAwg31 != null)
+            CardAwg31.Visibility = isAwg31 ? Visibility.Visible : Visibility.Collapsed;
+
+        var awg31Parts = _settings.Awg31.FormatSummaryParts();
+        if (TxtAwg31CardDesc != null)
+            TxtAwg31CardDesc.Text = awg31Parts.Count > 0
+                ? s.Awg31CardActiveDesc(string.Join(", ", awg31Parts))
+                : s.Awg31CardDefaultDesc;
+
         if (CardExcludeNode != null)
         {
             CardExcludeNode.IsEnabled = !isMasque;
@@ -826,12 +886,15 @@ public partial class MainWindow : FluentWindow
 
         var protoLabel = _selectedProto switch
         {
+            "awg31" => "AmneziaWG 3.1",
             "wg" => "WireGuard",
             "masque" => "MASQUE (QUIC)",
             "masque-h2" => "MASQUE H2 (TCP)",
             _ => "AmneziaWG"
         };
         var flags = new List<string> { s.HeroProto(protoLabel) };
+        if (isAwg31 && awg31Parts.Count > 0)
+            flags.AddRange(awg31Parts);
         if (!isMasque && ChkDme.IsChecked == true)
         {
             var nodes = ParseExcludedNodes(TxtExcludeNode?.Text);
@@ -903,6 +966,19 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (!_isAdvancedScanMode &&
+            string.Equals(_selectedProto, "awg31", StringComparison.OrdinalIgnoreCase))
+        {
+            SyncAwg31FromUI();
+            if (_settings.Awg31.FindFirstInvalidRange() is { } badRange)
+            {
+                ScanProgressCard.Visibility = Visibility.Visible;
+                PbScan.Value = 0;
+                ShowScanError(s.Awg31InvalidRangeErr(badRange.Flag, badRange.Value));
+                return;
+            }
+        }
+
         _endpoints.Clear();
         _endpointMap.Clear();
         _bestEndpoint = null;
@@ -948,10 +1024,10 @@ public partial class MainWindow : FluentWindow
             psi.ArgumentList.Add("scan");
             psi.ArgumentList.Add("-stream-json");
 
+            CoreService.SaveSettings(_settings);
             var excludedNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (_isAdvancedScanMode)
             {
-                CoreService.SaveSettings(_settings);
                 var customArgs = SplitCliArgs(TxtCustomFlags.Text);
                 int startIdx = (customArgs.Count > 0 && customArgs[0].Equals("scan", StringComparison.OrdinalIgnoreCase)) ? 1 : 0;
                 bool hasAccount = false;
@@ -1009,6 +1085,8 @@ public partial class MainWindow : FluentWindow
                 foreach (var node in nodes)
                     excludedNodes.Add(node);
 
+                if (string.Equals(_selectedProto, "awg31", StringComparison.OrdinalIgnoreCase))
+                    _settings.Awg31.AppendCliArgs(psi.ArgumentList);
                 if (ChkPing.IsChecked == true) psi.ArgumentList.Add("-P");
                 if (nodes.Count > 0) { psi.ArgumentList.Add("-exclude-node"); psi.ArgumentList.Add(string.Join(",", nodes)); }
                 if (ChkFull.IsChecked == true) psi.ArgumentList.Add("-f");
@@ -1278,7 +1356,10 @@ public partial class MainWindow : FluentWindow
         var s = Strings.Instance;
         try
         {
-            var confText = CoreService.ExportConfig(_accountPath, ep.Endpoint, _selectedProto);
+            var awg31 = string.Equals(_selectedProto, "awg31", StringComparison.OrdinalIgnoreCase)
+                ? GetEffectiveAwg31Options()
+                : null;
+            var confText = CoreService.ExportConfig(_accountPath, ep.Endpoint, _selectedProto, awg31);
             var isMasque = _selectedProto.StartsWith("masque", StringComparison.OrdinalIgnoreCase);
             var nodeTag = string.IsNullOrWhiteSpace(ep.Node) ? "warp" : ep.Node;
             var host = ep.Endpoint.StartsWith('[') && ep.Endpoint.IndexOf(']') is int end and > 1
@@ -1331,6 +1412,17 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        Awg31Options? awg31 = null;
+        if (string.Equals(proto, "awg31", StringComparison.OrdinalIgnoreCase))
+        {
+            awg31 = GetEffectiveAwg31Options();
+            if (awg31.FindFirstInvalidRange() is { } badRange)
+            {
+                ShowCoreNotice(true, s.SocksStartErr, s.Awg31InvalidRangeErr(badRange.Flag, badRange.Value));
+                return;
+            }
+        }
+
         StopSocksProcess();
         try
         {
@@ -1346,6 +1438,7 @@ public partial class MainWindow : FluentWindow
             psi.ArgumentList.Add("-p"); psi.ArgumentList.Add(proto);
             psi.ArgumentList.Add("-P"); psi.ArgumentList.Add("1080");
             psi.ArgumentList.Add("-a"); psi.ArgumentList.Add(_accountPath);
+            awg31?.AppendCliArgs(psi.ArgumentList);
 
             var proc = Process.Start(psi) ?? throw new InvalidOperationException(s.SocksStartErr);
             var errTask = proc.StandardError.ReadToEndAsync();
@@ -1581,6 +1674,11 @@ public partial class MainWindow : FluentWindow
 
     private void CleanupAll()
     {
+        if (!_isInitializing)
+        {
+            SyncAwg31FromUI();
+            CoreService.SaveSettings(_settings);
+        }
         _githubCornerHoverTimer.Stop();
         StopScanProcess();
         StopSocksProcess();

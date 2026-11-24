@@ -1,9 +1,144 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using System.Windows.Media;
 
 namespace WarpscoutGui;
+
+public sealed class Awg31Options
+{
+    public string Padding { get; set; } = "";
+    public string RekeyAfter { get; set; } = "";
+    public string RekeyTimeout { get; set; } = "";
+    public string RejectAfter { get; set; } = "";
+    public string KeepaliveTimeout { get; set; } = "";
+    public string MaxHandshakes { get; set; } = "";
+    public bool DisableCookies { get; set; }
+    public bool RandomTrailers { get; set; }
+
+    internal (string Flag, string ConfKey, string Value)[] GetRangeFields() =>
+    [
+        ("padding", "ContentPaddingAddition", Padding),
+        ("rekey-after", "RekeyAfterTime", RekeyAfter),
+        ("rekey-timeout", "RekeyTimeout", RekeyTimeout),
+        ("reject-after", "RejectAfterTime", RejectAfter),
+        ("keepalive-timeout", "KeepaliveTimeout", KeepaliveTimeout),
+        ("max-handshakes", "MaxHandshakeAttempts", MaxHandshakes),
+    ];
+
+    internal static bool IsValidRange(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return true;
+
+        var s = raw.Trim();
+        var dashIdx = s.IndexOf('-');
+        if (dashIdx < 0)
+            return uint.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out _);
+
+        var parts = s.Split('-');
+        return parts.Length == 2
+            && uint.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var min)
+            && uint.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var max)
+            && min <= max;
+    }
+
+    internal (string Flag, string Value)? FindFirstInvalidRange()
+    {
+        foreach (var (flag, _, value) in GetRangeFields())
+        {
+            if (!string.IsNullOrWhiteSpace(value) && !IsValidRange(value))
+                return ("-" + flag, value.Trim());
+        }
+        return null;
+    }
+
+    internal void AppendCliArgs(ICollection<string> args)
+    {
+        foreach (var (flag, _, value) in GetRangeFields())
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                args.Add("-" + flag);
+                args.Add(value.Trim());
+            }
+        }
+        if (DisableCookies)
+            args.Add("-disable-cookies");
+        if (RandomTrailers)
+            args.Add("-random-trailers");
+    }
+
+    internal List<string> FormatSummaryParts()
+    {
+        var parts = new List<string>();
+        foreach (var (flag, _, value) in GetRangeFields())
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                parts.Add($"{flag} {value.Trim()}");
+        }
+        if (RandomTrailers)
+            parts.Add("random-trailers");
+        if (DisableCookies)
+            parts.Add("disable-cookies");
+        return parts;
+    }
+
+    internal static Awg31Options ParseFromCliArgs(IReadOnlyList<string> args, int startIdx = 0)
+    {
+        var opts = new Awg31Options();
+        for (int i = Math.Max(0, startIdx); i < args.Count; i++)
+        {
+            var arg = args[i];
+            if (string.IsNullOrEmpty(arg) || !arg.StartsWith('-'))
+                continue;
+
+            var eqIdx = arg.IndexOf('=');
+            var rawName = eqIdx >= 0 ? arg[..eqIdx] : arg;
+            var name = rawName.StartsWith("--", StringComparison.Ordinal)
+                ? rawName[2..]
+                : rawName[1..];
+
+            if (name == "disable-cookies")
+            {
+                opts.DisableCookies = eqIdx < 0 || ParseBoolArg(arg[(eqIdx + 1)..]);
+                continue;
+            }
+            if (name == "random-trailers")
+            {
+                opts.RandomTrailers = eqIdx < 0 || ParseBoolArg(arg[(eqIdx + 1)..]);
+                continue;
+            }
+
+            string? val = null;
+            if (eqIdx >= 0)
+                val = arg[(eqIdx + 1)..].Trim();
+            else if (i + 1 < args.Count && !args[i + 1].StartsWith('-'))
+                val = args[++i].Trim();
+
+            if (val == null)
+                continue;
+
+            switch (name)
+            {
+                case "padding": opts.Padding = val; break;
+                case "rekey-after": opts.RekeyAfter = val; break;
+                case "rekey-timeout": opts.RekeyTimeout = val; break;
+                case "reject-after": opts.RejectAfter = val; break;
+                case "keepalive-timeout": opts.KeepaliveTimeout = val; break;
+                case "max-handshakes": opts.MaxHandshakes = val; break;
+            }
+        }
+        return opts;
+    }
+
+    private static bool ParseBoolArg(string raw)
+    {
+        var v = raw.Trim();
+        return v == "1" || (bool.TryParse(v, out var b) && b);
+    }
+}
 
 public sealed class AppSettings
 {
@@ -20,6 +155,7 @@ public sealed class AppSettings
     public bool WarnOnCloseWithProxy { get; set; } = false;
     public string DefaultExitAction { get; set; } = "";
     public string CustomScanFlags { get; set; } = "-p awg -P -exclude-node DME";
+    public Awg31Options Awg31 { get; set; } = new();
 }
 
 internal enum CloseAction

@@ -10,6 +10,15 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
+            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#59FFFFFF" />
+            <Style TargetType="{x:Type ui:TextBox}" BasedOn="{StaticResource DefaultUiTextBoxStyle}">
+                <Style.Triggers>
+                    <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                        <Setter Property="PlaceholderEnabled" Value="False" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
             <!-- Windows 11 Fluent 3D Vector Icon: Shield + Network Globe -->
             <DrawingImage x:Key="FluentShieldGlobeIcon">
                 <DrawingImage.Drawing>

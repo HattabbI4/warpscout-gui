@@ -65,6 +65,43 @@ public sealed class Strings : INotifyPropertyChanged
     public string ScanParamsHeader => T("Параметры сканирования", "Scan Parameters");
     public string ProtoTitle => T("Протокол подключения", "Connection protocol");
     public string ProtoDesc => T("Выбор протокола туннеля для проверки узлов и создания конфигурации", "Tunnel protocol used to test nodes and generate config files");
+    public string Awg31CardTitle => T("Параметры AmneziaWG 3.1", "AmneziaWG 3.1 Parameters");
+    public string Awg31CardDefaultDesc => T(
+        "Опционально — оставьте пустым для значений по умолчанию. Требуется клиент с поддержкой AmneziaWG 3.1",
+        "Optional — leave blank for defaults. Requires a client with AmneziaWG 3.1 support");
+    public string Awg31CardActiveDesc(string summary) => T(
+        $"Активно: {summary} · Требуется клиент AmneziaWG 3.1",
+        $"Active: {summary} · Requires AmneziaWG 3.1 client");
+    public string Awg31PaddingTitle => T("Добавление паддинга (-padding)", "Data packet padding (-padding)");
+    public string Awg31PaddingDesc => T(
+        "Случайные байты внутри каждого пакета с данными (N или MIN-MAX, рекомендуется до 128)",
+        "Random bytes inside every data packet (N or MIN-MAX, keep up to ~128)");
+    public string Awg31PaddingPlaceholder => T("напр. 16-128", "e.g. 16-128");
+    public string Awg31RandomTrailersTitle => T("Случайный хвост (-random-trailers)", "Random trailers (-random-trailers)");
+    public string Awg31RandomTrailersDesc => T(
+        "Добавлять случайные байты к пакетам рукопожатия и нули внутрь пакетов с данными",
+        "Append random bytes to handshake packets and zeroes inside data packets");
+    public string Awg31DisableCookiesTitle => T("Отключить cookie (-disable-cookies)", "Disable cookies (-disable-cookies)");
+    public string Awg31DisableCookiesDesc => T(
+        "Не отправлять cookie reply при активном пробинге",
+        "Never send cookie replies under active probing");
+    public string Awg31TimingsHeader => T("Тайминги и повторы рукопожатия (N или MIN-MAX)", "Handshake timings & retries (N or MIN-MAX)");
+    public string Awg31RekeyAfterLabel => T("Rekey после, сек (-rekey-after)", "Rekey after, sec (-rekey-after)");
+    public string Awg31RekeyAfterPlaceholder => T("по умолч.: 120", "default: 120");
+    public string Awg31RejectAfterLabel => T("Reject после, сек (-reject-after)", "Reject after, sec (-reject-after)");
+    public string Awg31RejectAfterPlaceholder => T("по умолч.: 180", "default: 180");
+    public string Awg31RejectAfterTooltip => T(
+        "Не ставьте меньше rekey-after (по умолчанию 120), иначе ключи истекут раньше обновления",
+        "Do not set below rekey-after (120 by default), or keys expire before rekey");
+    public string Awg31RekeyTimeoutLabel => T("Таймаут rekey, сек (-rekey-timeout)", "Rekey timeout, sec (-rekey-timeout)");
+    public string Awg31RekeyTimeoutPlaceholder => T("по умолч.: 5", "default: 5");
+    public string Awg31KeepaliveTimeoutLabel => T("Таймаут keepalive, сек (-keepalive-timeout)", "Keepalive timeout, sec (-keepalive-timeout)");
+    public string Awg31KeepaliveTimeoutPlaceholder => T("по умолч.: 10", "default: 10");
+    public string Awg31MaxHandshakesLabel => T("Попытки рукопожатия (-max-handshakes)", "Max handshakes (-max-handshakes)");
+    public string Awg31MaxHandshakesPlaceholder => T("по умолч.: 18", "default: 18");
+    public string Awg31InvalidRangeErr(string flag, string val) => T(
+        $"Неверный формат {flag} «{val}»: ожидается число N или диапазон MIN-MAX (MIN ≤ MAX)",
+        $"Invalid {flag} value «{val}»: expected N or MIN-MAX (MIN ≤ MAX)");
     public string ExcludeNodeTitle => T("Исключить узел", "Exclude node");
     public string ExcludeNodeDesc => T("Исключать указанные узлы Cloudflare (например, DME, через запятую)", "Exclude specified Cloudflare nodes (e.g., DME, comma-separated)");
     public string ExcludeNodePlaceholder => "DME";
@@ -85,8 +122,8 @@ public sealed class Strings : INotifyPropertyChanged
         "Entered flags override standard toggles and pass directly to warpscout scan (-stream-json and -a are added automatically)");
     public string AdvFlagsPlaceholder => T("Например: -p awg -P -exclude-node DME -jt 20", "Example: -p awg -P -exclude-node DME -jt 20");
     public string AdvFlagsExamples => T(
-        "Примеры: -p awg -P -exclude-node DME  |  -p masque -P  |  -p wg -f -speed -t 3",
-        "Examples: -p awg -P -exclude-node DME  |  -p masque -P  |  -p wg -f -speed -t 3");
+        "Примеры: -p awg -P -exclude-node DME  |  -p awg31 -P -padding 16-128  |  -p masque -P  |  -p wg -f -speed -t 3",
+        "Examples: -p awg -P -exclude-node DME  |  -p awg31 -P -padding 16-128  |  -p masque -P  |  -p wg -f -speed -t 3");
 
     // Servers Page
     public string ServersTitle => T("Рабочие серверы", "Working Servers");

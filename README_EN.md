@@ -10,7 +10,7 @@
 - **`warpscout.exe` Core Management:**
   - Pick or override the core executable path right in **Settings**.
   - On first launch, the app automatically fetches the latest `warpscout.exe` binary from [vernette/warpscout](https://github.com/vernette/warpscout) releases.
-- **One-Click Server Discovery:** Live-streaming endpoint table for **AmneziaWG**, **WireGuard**, **MASQUE**, and **MASQUE H2**, complete with in-tunnel latency checks.
+- **One-Click Server Discovery:** Live-streaming endpoint table for **AmneziaWG**, **AmneziaWG 3.1** (`padding`, timings, `random-trailers`, `disable-cookies`), **WireGuard**, **MASQUE**, and **MASQUE H2**, complete with in-tunnel latency checks.
 - **Quick Actions & System Tray:** Export ready-to-use `.conf` / `.json` configs, toggle a local SOCKS5 proxy on `127.0.0.1:1080`, minimize to the system tray, and confirm exit when the proxy is active (with an option to remember your choice).
 
 ## Screenshots

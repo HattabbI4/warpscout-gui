@@ -42,6 +42,7 @@ public static class CoreService
                 var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(target));
                 if (s != null)
                 {
+                    s.Awg31 ??= new Awg31Options();
                     if (s.SettingsVersion < AppSettings.CurrentSettingsVersion)
                     {
                         if (string.Equals(s.DefaultExitAction, "exit", StringComparison.OrdinalIgnoreCase))
@@ -155,12 +156,32 @@ public static class CoreService
         return "";
     }
 
-    internal static bool ShouldAutoUpgradeCore(string resolvedCorePath, AppSettings settings)
+    internal static bool ShouldAutoUpgradeCore(string resolvedCorePath, AppSettings settings, string? installedVersion = null)
     {
         if (string.IsNullOrWhiteSpace(resolvedCorePath))
             return true;
-        return !string.Equals(settings.CoreRepo, CoreGithubRepo, StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(Path.GetFullPath(resolvedCorePath), Path.GetFullPath(DefaultDownloadedCorePath), StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(Path.GetFullPath(resolvedCorePath), Path.GetFullPath(DefaultDownloadedCorePath), StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!string.Equals(settings.CoreRepo, CoreGithubRepo, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return TryParseCoreVersion(installedVersion, out var ver) && ver < new Version(0, 17);
+    }
+
+    internal static bool TryParseCoreVersion(string? raw, out Version version)
+    {
+        version = new Version(0, 0);
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var s = raw.Trim().TrimStart('v', 'V');
+        var end = s.IndexOfAny(['-', '+', ' ', '\t']);
+        if (end >= 0)
+            s = s[..end];
+
+        if (!Version.TryParse(s, out var parsed) || parsed == null)
+            return false;
+        version = parsed;
+        return true;
     }
 
     public static async Task<string> GetCoreVersionAsync(string corePath)
@@ -369,7 +390,7 @@ public static class CoreService
         return ReadAccount(accPath) ?? throw new InvalidOperationException(s.RegisterReadErr);
     }
 
-    public static string ExportConfig(string accPath, string endpoint, string proto)
+    public static string ExportConfig(string accPath, string endpoint, string proto, Awg31Options? awg31 = null)
     {
         var s = Strings.Instance;
         var acc = ReadAccount(accPath) ?? throw new InvalidOperationException(s.AccountMissingErr);
@@ -398,18 +419,35 @@ public static class CoreService
             return JsonSerializer.Serialize(obj, IndentedJson);
         }
 
+        bool isAwg31 = string.Equals(proto, "awg31", StringComparison.OrdinalIgnoreCase);
+        bool isAwg = isAwg31 || string.Equals(proto, "awg", StringComparison.OrdinalIgnoreCase);
+        if (isAwg31 && awg31?.FindFirstInvalidRange() is { } bad)
+            throw new InvalidOperationException(s.Awg31InvalidRangeErr(bad.Flag, bad.Value));
+
         var addr = string.IsNullOrWhiteSpace(acc.IPv4) ? "172.16.0.2" : acc.IPv4;
         var sb = new StringBuilder();
         sb.AppendLine("[Interface]");
         sb.AppendLine($"Address = {addr}/32");
         sb.AppendLine($"PrivateKey = {acc.PrivateKey}");
         sb.AppendLine("DNS = 1.1.1.1, 1.0.0.1");
-        if (proto == "awg")
+        if (isAwg)
         {
             sb.AppendLine("Jc = 6");
             sb.AppendLine("Jmin = 10");
             sb.AppendLine("Jmax = 50");
             sb.AppendLine($"I1 = {DefaultAwgI1}");
+            if (isAwg31 && awg31 != null)
+            {
+                foreach (var (_, confKey, value) in awg31.GetRangeFields())
+                {
+                    if (!string.IsNullOrWhiteSpace(value))
+                        sb.AppendLine($"{confKey} = {value.Trim()}");
+                }
+                if (awg31.DisableCookies)
+                    sb.AppendLine("DisableCookies = on");
+                if (awg31.RandomTrailers)
+                    sb.AppendLine("RandomTrailers = on");
+            }
         }
         sb.AppendLine();
         sb.AppendLine("[Peer]");
