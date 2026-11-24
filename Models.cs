@@ -11,6 +11,7 @@ public sealed class AppSettings
 
     public int SettingsVersion { get; set; }
     public string CorePath { get; set; } = "";
+    public string CoreRepo { get; set; } = "";
     public string Language { get; set; } = "ru";
     public bool ExcludeNodeEnabled { get; set; } = true;
     public string ExcludedNode { get; set; } = "DME";
@@ -45,7 +46,7 @@ public sealed class SavedEndpoint
     public string Location { get; set; } = "";
     public double PingMs { get; set; }
     public double TunPingMs { get; set; }
-    public double Loss { get; set; }
+    public double? Loss { get; set; }
     public double SpeedMbps { get; set; }
 }
 
@@ -70,25 +71,38 @@ public sealed class AccountData
     [JsonPropertyName("masque")] public MasqueAccount? Masque { get; set; }
 }
 
+public sealed class ScanEndpoint
+{
+    [JsonPropertyName("endpoint")] public string Endpoint { get; set; } = "";
+    [JsonPropertyName("seen_as")] public string? SeenAs { get; set; }
+    [JsonPropertyName("node")] public string? Node { get; set; }
+    [JsonPropertyName("node_city")] public string? NodeCity { get; set; }
+    [JsonPropertyName("node_country")] public string? NodeCountry { get; set; }
+    [JsonPropertyName("ping_ms")] public double? PingMs { get; set; }
+    [JsonPropertyName("tun_ping_ms")] public double? TunPingMs { get; set; }
+    [JsonPropertyName("loss_pct")] public double? LossPct { get; set; }
+    [JsonPropertyName("speed_mbps")] public double? SpeedMbps { get; set; }
+    [JsonPropertyName("torn")] public bool Torn { get; set; }
+}
+
+public sealed class ScanResult
+{
+    [JsonPropertyName("proto")] public string? Proto { get; set; }
+    [JsonPropertyName("working_count")] public int WorkingCount { get; set; }
+    [JsonPropertyName("best")] public string? Best { get; set; }
+    [JsonPropertyName("working")] public List<ScanEndpoint>? Working { get; set; }
+    [JsonPropertyName("torn")] public List<ScanEndpoint>? Torn { get; set; }
+}
+
 public sealed class ScanStreamEvent
 {
     [JsonPropertyName("event")] public string Event { get; set; } = "";
-    [JsonPropertyName("phase")] public string Phase { get; set; } = "";
+    [JsonPropertyName("phase")] public string? Phase { get; set; }
     [JsonPropertyName("done")] public int Done { get; set; }
     [JsonPropertyName("total")] public int Total { get; set; }
-    [JsonPropertyName("error")] public string Error { get; set; } = "";
-    [JsonPropertyName("best")] public string Best { get; set; } = "";
-    [JsonPropertyName("working")] public List<ScanStreamEvent>? Working { get; set; }
-
-    [JsonPropertyName("endpoint")] public string Endpoint { get; set; } = "";
-    [JsonPropertyName("node")] public string Node { get; set; } = "";
-    [JsonPropertyName("country")] public string Country { get; set; } = "";
-    [JsonPropertyName("city")] public string City { get; set; } = "";
-    [JsonPropertyName("location")] public string Location { get; set; } = "";
-    [JsonPropertyName("ping_ms")] public double PingMs { get; set; }
-    [JsonPropertyName("tun_ping_ms")] public double TunPingMs { get; set; }
-    [JsonPropertyName("loss")] public double Loss { get; set; }
-    [JsonPropertyName("speed_mbps")] public double SpeedMbps { get; set; }
+    [JsonPropertyName("error")] public string? Error { get; set; }
+    [JsonPropertyName("endpoint")] public ScanEndpoint? Endpoint { get; set; }
+    [JsonPropertyName("result")] public ScanResult? Result { get; set; }
 }
 
 public sealed class EndpointItem : INotifyPropertyChanged
@@ -101,7 +115,7 @@ public sealed class EndpointItem : INotifyPropertyChanged
     private bool _isProxied;
     private double _pingMs;
     private double _tunPingMs;
-    private double _loss;
+    private double? _loss;
     private double _speedMbps;
 
     public string Endpoint { get; set; } = "";
@@ -122,7 +136,7 @@ public sealed class EndpointItem : INotifyPropertyChanged
         set { _tunPingMs = value; Notify(nameof(DisplayPing)); Notify(nameof(PingBrush)); }
     }
 
-    public double Loss
+    public double? Loss
     {
         get => _loss;
         set { _loss = value; Notify(nameof(DisplayLoss)); }
@@ -152,9 +166,23 @@ public sealed class EndpointItem : INotifyPropertyChanged
     public string DisplayNode => string.IsNullOrWhiteSpace(Node) ? "—" : Node;
     public string DisplayPing => EffectivePingMs < 9999 ? $"{Math.Round(EffectivePingMs)} {Strings.Instance.UnitMs}" : "—";
     public System.Windows.Media.Brush PingBrush => EffectivePingMs < 80 ? BrushGreen : (EffectivePingMs < 150 ? BrushAmber : BrushRed);
-    public string DisplayLoss => $"{Math.Round(Loss)}%";
+    public string DisplayLoss => Loss.HasValue ? $"{Math.Round(Loss.Value)}%" : "—";
     public string DisplaySpeed => SpeedMbps > 0 ? $"{SpeedMbps:0.0} {Strings.Instance.UnitMbps}" : "—";
     public string ProxyButtonText => IsProxied ? Strings.Instance.RowProxyActive : Strings.Instance.RowProxyStart;
+
+    internal static EndpointItem FromScanEndpoint(ScanEndpoint ep, bool isProxied = false) => new()
+    {
+        Endpoint = ep.Endpoint,
+        Node = ep.Node ?? "",
+        Country = ep.NodeCountry ?? "",
+        City = ep.NodeCity ?? "",
+        Location = ep.SeenAs ?? "",
+        PingMs = ep.PingMs ?? 0,
+        TunPingMs = ep.TunPingMs ?? 0,
+        Loss = ep.LossPct,
+        SpeedMbps = ep.SpeedMbps ?? 0,
+        IsProxied = isProxied,
+    };
 
     public void RefreshLocale()
     {

@@ -238,7 +238,8 @@ public sealed class Strings : INotifyPropertyChanged
     public string AccountSavedLog(string path) => T($"Аккаунт сохранён: {path}", $"Account saved: {path}");
     public string ScanStartErr => T("Не удалось запустить warpscout scan", "Failed to start warpscout scan");
     public string PhaseSpeed => T("Замер скорости...", "Testing speed...");
-    public string PhaseScan => T("Поиск открытых портов и проверка туннелей...", "Scanning ports and testing tunnels...");
+    public string PhasePorts => T("Поиск открытых портов...", "Probing reachable ports...");
+    public string PhaseTunnels => T("Проверка туннелей...", "Verifying tunnels...");
     public string PhaseProgress(string phaseName, int done, int total) => T(
         $"{phaseName} Проверено {done} из {total}",
         $"{phaseName} Checked {done} of {total}");
@@ -248,12 +249,28 @@ public sealed class Strings : INotifyPropertyChanged
     public string LogPhaseProgress(string phase, int done, int total) => T(
         $"[{phase}] проверено {done}/{total}",
         $"[{phase}] checked {done}/{total}");
-    public string LogEndpointFound(string ep, string country, string city, string node, double ping, double tunPing, double loss, string speedPart) => T(
-        $"+ НАЙДЕН {ep} | {country} {city} ({node}) | ping={ping:0}ms tun={tunPing:0}ms loss={loss:0}%{speedPart}",
-        $"+ FOUND {ep} | {country} {city} ({node}) | ping={ping:0}ms tun={tunPing:0}ms loss={loss:0}%{speedPart}");
-    public string LogScanDone(int count, string best) => T(
-        $"Готово: рабочих серверов {count}, лучший: {best}",
-        $"Done: {count} working servers, best: {best}");
+    public string LogEndpointFound(string ep, string country, string city, string node, double? ping, double? tunPing, double? loss, string speedPart)
+    {
+        var pingText = ping.HasValue ? $"{ping.Value:0}ms" : "—";
+        var tunText = tunPing.HasValue ? $"{tunPing.Value:0}ms" : "—";
+        var lossText = loss.HasValue ? $"{loss.Value:0}%" : "—";
+        var loc = string.Join(' ', new[] { country, city }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var locPart = string.IsNullOrEmpty(loc) ? node : $"{loc} ({node})";
+        return T(
+            $"+ НАЙДЕН {ep} | {locPart} | ping={pingText} tun={tunText} loss={lossText}{speedPart}",
+            $"+ FOUND {ep} | {locPart} | ping={pingText} tun={tunText} loss={lossText}{speedPart}");
+    }
+    public string LogEndpointTorn(string ep, string node) => T(
+        $"~ РАЗОРВАН {ep} ({node})",
+        $"~ TORN {ep} ({node})");
+    public string LogScanDone(int count, string best, int tornCount = 0)
+    {
+        var tornRu = tornCount > 0 ? $", разорвано: {tornCount}" : "";
+        var tornEn = tornCount > 0 ? $", torn: {tornCount}" : "";
+        return T(
+            $"Готово: рабочих серверов {count}{tornRu}, лучший: {best}",
+            $"Done: {count} working servers{tornEn}, best: {best}");
+    }
     public string ScanErrorDefault => T("Ошибка сканирования", "Scan error");
     public string ProcessExitedCode(int code) => T($"Процесс завершился с кодом {code}", $"Process exited with code {code}");
     public string ScanDonePhase(int count) => T($"Готово · Найдено рабочих серверов: {count}", $"Done · Working servers found: {count}");

@@ -150,7 +150,7 @@ public partial class MainWindow : FluentWindow
                 SpeedMbps = ep.SpeedMbps,
             };
             _endpointMap[ep.Endpoint] = item;
-            InsertSorted(item);
+            _endpoints.Add(item);
         }
 
         _bestEndpoint = string.IsNullOrWhiteSpace(saved.BestEndpoint) ? null : saved.BestEndpoint;
@@ -277,8 +277,8 @@ public partial class MainWindow : FluentWindow
     {
         await RefreshCoreAndAccountAsync();
 
-        // First-launch: if core binary is missing, show explicit download progress and lock UI.
-        if (string.IsNullOrEmpty(_corePath))
+        // First-launch or upgrading from the temporary fork build: download upstream core and lock UI.
+        if (CoreService.ShouldAutoUpgradeCore(_corePath, _settings))
             await DownloadOrUpdateCoreAsync();
     }
 
@@ -562,6 +562,7 @@ public partial class MainWindow : FluentWindow
                 TxtCoreDownloadStatus.Text = p.status;
             });
 
+            bool forceUpdate = !string.Equals(_settings.CoreRepo, CoreService.CoreGithubRepo, StringComparison.OrdinalIgnoreCase);
             var (savedPath, ver, updated) = await CoreService.DownloadOrUpdateCoreAsync(
                 CoreService.DefaultDownloadedCorePath,
                 _corePath,
@@ -571,11 +572,13 @@ public partial class MainWindow : FluentWindow
                     StopSocksProcess();
                 }),
                 progress,
-                CancellationToken.None);
+                CancellationToken.None,
+                forceUpdate);
 
             if (updated)
             {
                 _settings.CorePath = savedPath;
+                _settings.CoreRepo = CoreService.CoreGithubRepo;
                 CoreService.SaveSettings(_settings);
             }
             SetCoreDownloadingUI(false);
@@ -653,7 +656,10 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        _settings.CorePath = Path.GetFullPath(path);
+        var fullPath = Path.GetFullPath(path);
+        _settings.CorePath = fullPath;
+        if (!string.Equals(fullPath, Path.GetFullPath(CoreService.DefaultDownloadedCorePath), StringComparison.OrdinalIgnoreCase))
+            _settings.CoreRepo = "";
         CoreService.SaveSettings(_settings);
         CoreNoticePanel.Visibility = Visibility.Collapsed;
         await RefreshCoreAndAccountAsync();
@@ -1048,26 +1054,44 @@ public partial class MainWindow : FluentWindow
                 {
                     var pct = ev.Total > 0 ? Math.Min(100.0, 100.0 * ev.Done / ev.Total) : 10.0;
                     PbScan.Value = pct;
-                    var phaseName = ev.Phase == "speed" ? s.PhaseSpeed : s.PhaseScan;
+                    var phase = ev.Phase ?? "";
+                    var phaseName = phase switch
+                    {
+                        "ports" => s.PhasePorts,
+                        "speed" => s.PhaseSpeed,
+                        _ => s.PhaseTunnels,
+                    };
                     TxtScanPhase.Text = ev.Total > 0 ? s.PhaseProgress(phaseName, ev.Done, ev.Total) : phaseName;
                     if (ev.Done == 0)
-                        AppendScanLog(s.LogPhaseStart(ev.Phase, ev.Total));
+                        AppendScanLog(s.LogPhaseStart(phase, ev.Total));
                     else if (ev.Total <= 0 || ev.Done == ev.Total || ev.Done % Math.Max(1, ev.Total / 20) == 0)
-                        AppendScanLog(s.LogPhaseProgress(ev.Phase, ev.Done, ev.Total));
+                        AppendScanLog(s.LogPhaseProgress(phase, ev.Done, ev.Total));
                 }
-                else if (ev.Event == "endpoint")
+                else if (ev.Event == "endpoint" && ev.Endpoint is { } ep)
                 {
-                    if (excludedNodes.Count > 0 && excludedNodes.Contains(ev.Node))
+                    var nodeLabel = string.IsNullOrWhiteSpace(ep.Node) ? "—" : ep.Node;
+                    if (ep.Torn)
+                    {
+                        AppendScanLog(s.LogEndpointTorn(ep.Endpoint, nodeLabel));
                         continue;
-                    UpsertEndpoint(ev);
-                    var speedPart = ev.SpeedMbps > 0 ? $" speed={ev.SpeedMbps:0.1}Mbps" : "";
-                    AppendScanLog(s.LogEndpointFound(ev.Endpoint, ev.Country, ev.City, ev.Node, ev.PingMs, ev.TunPingMs, ev.Loss, speedPart));
+                    }
+                    if (excludedNodes.Count > 0 && !string.IsNullOrEmpty(ep.Node) && excludedNodes.Contains(ep.Node))
+                        continue;
+                    UpsertEndpoint(ep);
+                    var speedPart = ep.SpeedMbps is > 0 ? $" speed={ep.SpeedMbps.Value:0.1}Mbps" : "";
+                    AppendScanLog(s.LogEndpointFound(ep.Endpoint, ep.NodeCountry ?? "", ep.NodeCity ?? ep.SeenAs ?? "", nodeLabel, ep.PingMs, ep.TunPingMs, ep.LossPct, speedPart));
                 }
-                else if (ev.Event == "done")
+                else if (ev.Event == "done" && ev.Result is { } res)
                 {
                     gotDone = true;
-                    ApplyDoneEndpoints(ev);
-                    AppendScanLog(s.LogScanDone(ev.Working?.Count ?? _endpoints.Count, string.IsNullOrEmpty(ev.Best) ? "—" : ev.Best));
+                    if (!string.IsNullOrWhiteSpace(res.Proto))
+                    {
+                        scanProto = res.Proto;
+                        if (_isAdvancedScanMode)
+                            _selectedProto = res.Proto;
+                    }
+                    ApplyDoneEndpoints(res);
+                    AppendScanLog(s.LogScanDone(res.Working?.Count ?? res.WorkingCount, string.IsNullOrEmpty(res.Best) ? "—" : res.Best, res.Torn?.Count ?? 0));
                 }
                 else if (ev.Event == "error")
                 {
@@ -1078,7 +1102,7 @@ public partial class MainWindow : FluentWindow
 
             await Task.WhenAll(proc.WaitForExitAsync(CancellationToken.None), errTask);
 
-            if (!_scanStoppedByUser && !gotDone && proc.ExitCode != 0)
+            if (!hasError && !_scanStoppedByUser && !gotDone && proc.ExitCode != 0)
             {
                 hasError = true;
                 string errText;
@@ -1121,54 +1145,54 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void UpsertEndpoint(ScanStreamEvent ev, bool refreshFlags = true)
+    private void UpsertEndpoint(ScanEndpoint ep, bool refreshFlags = true, bool preserveOrder = false)
     {
-        if (string.IsNullOrWhiteSpace(ev.Endpoint)) return;
-        if (_endpointMap.TryGetValue(ev.Endpoint, out var existing))
+        if (string.IsNullOrWhiteSpace(ep.Endpoint)) return;
+        if (_endpointMap.TryGetValue(ep.Endpoint, out var existing))
         {
-            existing.PingMs = ev.PingMs;
-            existing.TunPingMs = ev.TunPingMs;
-            existing.Loss = ev.Loss;
-            existing.SpeedMbps = ev.SpeedMbps;
-            _endpoints.Remove(existing);
-            InsertSorted(existing);
+            existing.PingMs = ep.PingMs ?? 0;
+            existing.TunPingMs = ep.TunPingMs ?? 0;
+            existing.Loss = ep.LossPct;
+            existing.SpeedMbps = ep.SpeedMbps ?? 0;
+            if (!preserveOrder)
+            {
+                _endpoints.Remove(existing);
+                InsertSorted(existing);
+            }
         }
         else
         {
-            var item = new EndpointItem
-            {
-                Endpoint = ev.Endpoint,
-                Node = ev.Node,
-                Country = ev.Country,
-                City = ev.City,
-                Location = ev.Location,
-                PingMs = ev.PingMs,
-                TunPingMs = ev.TunPingMs,
-                Loss = ev.Loss,
-                SpeedMbps = ev.SpeedMbps,
-                IsProxied = _socksProcess != null && ev.Endpoint == _socksEndpoint,
-            };
-            _endpointMap[ev.Endpoint] = item;
-            InsertSorted(item);
+            var item = EndpointItem.FromScanEndpoint(ep, _socksProcess != null && ep.Endpoint == _socksEndpoint);
+            _endpointMap[ep.Endpoint] = item;
+            if (preserveOrder)
+                _endpoints.Add(item);
+            else
+                InsertSorted(item);
         }
         if (refreshFlags)
             RefreshBestFlags();
     }
 
-    private void ApplyDoneEndpoints(ScanStreamEvent ev)
+    private void ApplyDoneEndpoints(ScanResult res)
     {
-        if (ev.Working == null) return;
+        if (res.Working == null) return;
         _endpoints.Clear();
         _endpointMap.Clear();
-        foreach (var w in ev.Working)
-            UpsertEndpoint(w, refreshFlags: false);
-        RefreshBestFlags(ev.Best);
+        foreach (var w in res.Working)
+            UpsertEndpoint(w, refreshFlags: false, preserveOrder: true);
+        RefreshBestFlags(res.Best ?? "");
+    }
+
+    internal static int CompareEndpoints(EndpointItem a, EndpointItem b)
+    {
+        var lossCmp = (a.Loss ?? 0).CompareTo(b.Loss ?? 0);
+        return lossCmp != 0 ? lossCmp : a.EffectivePingMs.CompareTo(b.EffectivePingMs);
     }
 
     private void InsertSorted(EndpointItem item)
     {
         int idx = 0;
-        while (idx < _endpoints.Count && _endpoints[idx].EffectivePingMs <= item.EffectivePingMs)
+        while (idx < _endpoints.Count && CompareEndpoints(_endpoints[idx], item) <= 0)
             idx++;
         _endpoints.Insert(idx, item);
     }

@@ -1,6 +1,6 @@
 # Warpscout GUI Windows
 
-**Нативное десктопное приложение для Windows 10/11 для сканера [warpscout](https://github.com/HattabbI4/warpscout) на .NET 8 WPF + WPF-UI.**
+**Нативное десктопное приложение для Windows 10/11 для сканера [warpscout](https://github.com/vernette/warpscout) на .NET 8 WPF + WPF-UI.**
 
 [English Documentation](README_EN.md)
 
@@ -9,7 +9,7 @@
 - **Нативный интерфейс Windows 10/11 (Fluent 2 / Mica):** системный фон Mica, тёмная тема Windows 11 и нативные контролы [WPF-UI](https://github.com/lepoco/wpfui).
 - **Управление ядром `warpscout.exe`:**
   - Выбор файла ядра в **Настройках**.
-  - При первом запуске приложение автоматически скачает актуальное ядро `warpscout.exe` из релизов [HattabbI4/warpscout](https://github.com/HattabbI4/warpscout). Временно, пока разработчик warpscout не принял [PR](https://github.com/vernette/warpscout/pull/28).
+  - При первом запуске приложение автоматически скачает актуальное ядро `warpscout.exe` из релизов [vernette/warpscout](https://github.com/vernette/warpscout).
 - **Поиск серверов в 1 клик:** потоковая таблица для **AmneziaWG**, **WireGuard**, **MASQUE** и **MASQUE H2** с замером пинга внутри туннеля.
 - **Быстрые действия и трей:** скачивание готового `.conf` / `.json`, включение локального SOCKS5-прокси `127.0.0.1:1080`, сворачивание в системный трей и предупреждение при выходе с активным прокси (с запоминанием выбора).
 

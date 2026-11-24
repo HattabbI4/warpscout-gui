@@ -245,6 +245,7 @@ public sealed class WarpscoutTests : IDisposable
     {
         var defaults = new AppSettings();
         Assert.Equal("", defaults.CorePath);
+        Assert.Equal("", defaults.CoreRepo);
         Assert.Equal("ru", defaults.Language);
         Assert.True(defaults.ExcludeNodeEnabled);
         Assert.Equal("DME", defaults.ExcludedNode);
@@ -257,6 +258,7 @@ public sealed class WarpscoutTests : IDisposable
         var custom = new AppSettings
         {
             CorePath = @"C:\tools\warpscout.exe",
+            CoreRepo = CoreService.CoreGithubRepo,
             Language = "en",
             ExcludeNodeEnabled = false,
             ExcludedNode = "FRA,AMS",
@@ -270,6 +272,7 @@ public sealed class WarpscoutTests : IDisposable
 
         Assert.NotNull(roundTripped);
         Assert.Equal(custom.CorePath, roundTripped.CorePath);
+        Assert.Equal(custom.CoreRepo, roundTripped.CoreRepo);
         Assert.Equal(custom.Language, roundTripped.Language);
         Assert.Equal(custom.ExcludeNodeEnabled, roundTripped.ExcludeNodeEnabled);
         Assert.Equal(custom.ExcludedNode, roundTripped.ExcludedNode);
@@ -288,36 +291,67 @@ public sealed class WarpscoutTests : IDisposable
     [Fact]
     public void ScanStreamEvent_DeserializesNdjsonPayloads()
     {
-        var progress = JsonSerializer.Deserialize<ScanStreamEvent>(
-            """{"event":"progress","phase":"scan","done":10,"total":100}""");
-        Assert.NotNull(progress);
-        Assert.Equal("progress", progress.Event);
-        Assert.Equal("scan", progress.Phase);
-        Assert.Equal(10, progress.Done);
-        Assert.Equal(100, progress.Total);
+        foreach (var phase in new[] { "ports", "tunnels", "speed" })
+        {
+            var progress = JsonSerializer.Deserialize<ScanStreamEvent>(
+                $$"""{"event":"progress","phase":"{{phase}}","done":10,"total":100}""");
+            Assert.NotNull(progress);
+            Assert.Equal("progress", progress.Event);
+            Assert.Equal(phase, progress.Phase);
+            Assert.Equal(10, progress.Done);
+            Assert.Equal(100, progress.Total);
+        }
 
-        var ep = JsonSerializer.Deserialize<ScanStreamEvent>(
-            """{"event":"endpoint","endpoint":"162.159.192.1:2408","node":"FRA","country":"DE","city":"Frankfurt","location":"Frankfurt, DE","ping_ms":42.5,"tun_ping_ms":55.1,"loss":0.5,"speed_mbps":123.4}""");
-        Assert.NotNull(ep);
-        Assert.Equal("endpoint", ep.Event);
-        Assert.Equal("162.159.192.1:2408", ep.Endpoint);
-        Assert.Equal("FRA", ep.Node);
-        Assert.Equal("DE", ep.Country);
-        Assert.Equal("Frankfurt", ep.City);
-        Assert.Equal("Frankfurt, DE", ep.Location);
-        Assert.Equal(42.5, ep.PingMs);
-        Assert.Equal(55.1, ep.TunPingMs);
-        Assert.Equal(0.5, ep.Loss);
-        Assert.Equal(123.4, ep.SpeedMbps);
+        var epEvent = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"endpoint","endpoint":{"endpoint":"162.159.192.1:2408","ip":"162.159.192.1","port":2408,"seen_as":"US","node":"FRA","node_city":"Frankfurt","node_country":"DE","ping_ms":42.5,"tun_ping_ms":55.1,"loss_pct":12.5,"speed_mbps":123.4,"measured":true,"torn":false}}""");
+        Assert.NotNull(epEvent);
+        Assert.Equal("endpoint", epEvent.Event);
+        Assert.NotNull(epEvent.Endpoint);
+        Assert.Equal("162.159.192.1:2408", epEvent.Endpoint.Endpoint);
+        Assert.Equal("US", epEvent.Endpoint.SeenAs);
+        Assert.Equal("FRA", epEvent.Endpoint.Node);
+        Assert.Equal("Frankfurt", epEvent.Endpoint.NodeCity);
+        Assert.Equal("DE", epEvent.Endpoint.NodeCountry);
+        Assert.Equal(42.5, epEvent.Endpoint.PingMs);
+        Assert.Equal(55.1, epEvent.Endpoint.TunPingMs);
+        Assert.Equal(12.5, epEvent.Endpoint.LossPct);
+        Assert.Equal(123.4, epEvent.Endpoint.SpeedMbps);
+        Assert.False(epEvent.Endpoint.Torn);
+
+        var nullEpEvent = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"endpoint","endpoint":{"endpoint":"162.159.192.2:2408","ip":"162.159.192.2","port":2408,"seen_as":null,"node":null,"node_city":null,"node_country":null,"ping_ms":null,"tun_ping_ms":null,"loss_pct":null,"speed_mbps":null,"measured":false,"torn":true}}""");
+        Assert.NotNull(nullEpEvent?.Endpoint);
+        Assert.Null(nullEpEvent.Endpoint.SeenAs);
+        Assert.Null(nullEpEvent.Endpoint.Node);
+        Assert.Null(nullEpEvent.Endpoint.NodeCity);
+        Assert.Null(nullEpEvent.Endpoint.NodeCountry);
+        Assert.Null(nullEpEvent.Endpoint.PingMs);
+        Assert.Null(nullEpEvent.Endpoint.TunPingMs);
+        Assert.Null(nullEpEvent.Endpoint.LossPct);
+        Assert.Null(nullEpEvent.Endpoint.SpeedMbps);
+        Assert.True(nullEpEvent.Endpoint.Torn);
 
         var done = JsonSerializer.Deserialize<ScanStreamEvent>(
-            """{"event":"done","best":"162.159.192.1:2408","working":[{"endpoint":"162.159.192.1:2408","node":"FRA","ping_ms":40}]}""");
-        Assert.NotNull(done);
+            """{"event":"done","result":{"$schema":"https://raw.githubusercontent.com/vernette/warpscout/master/schema/warpscout-v1.schema.json","version":1,"proto":"awg","total":10,"working_count":1,"best":"162.159.192.1:2408","picks":[{"endpoint":"162.159.192.1:2408","ip":"162.159.192.1","port":2408,"seen_as":"US","node":"FRA","node_city":"Frankfurt","node_country":"DE","ping_ms":40,"tun_ping_ms":null,"loss_pct":null,"speed_mbps":null,"measured":false,"torn":false}],"working":[{"endpoint":"162.159.192.1:2408","ip":"162.159.192.1","port":2408,"seen_as":"US","node":"FRA","node_city":"Frankfurt","node_country":"DE","ping_ms":40,"tun_ping_ms":null,"loss_pct":null,"speed_mbps":null,"measured":false,"torn":false}],"torn":[]}}""");
+        Assert.NotNull(done?.Result);
         Assert.Equal("done", done.Event);
-        Assert.Equal("162.159.192.1:2408", done.Best);
-        Assert.NotNull(done.Working);
-        Assert.Single(done.Working);
-        Assert.Equal("FRA", done.Working[0].Node);
+        Assert.Equal("awg", done.Result.Proto);
+        Assert.Equal(1, done.Result.WorkingCount);
+        Assert.Equal("162.159.192.1:2408", done.Result.Best);
+        Assert.NotNull(done.Result.Working);
+        Assert.Single(done.Result.Working);
+        Assert.Equal("FRA", done.Result.Working[0].Node);
+
+        var zeroDone = JsonSerializer.Deserialize<ScanStreamEvent>(
+            """{"event":"done","result":{"$schema":"https://raw.githubusercontent.com/vernette/warpscout/master/schema/warpscout-v1.schema.json","version":1,"proto":"awg","total":10,"working_count":0,"best":null,"picks":[],"working":[],"torn":[{"endpoint":"162.159.192.9:2408","ip":"162.159.192.9","port":2408,"seen_as":null,"node":null,"node_city":null,"node_country":null,"ping_ms":null,"tun_ping_ms":null,"loss_pct":100,"speed_mbps":null,"measured":true,"torn":true}]}}""");
+        Assert.NotNull(zeroDone?.Result);
+        Assert.Equal(0, zeroDone.Result.WorkingCount);
+        Assert.Null(zeroDone.Result.Best);
+        Assert.NotNull(zeroDone.Result.Working);
+        Assert.Empty(zeroDone.Result.Working);
+        Assert.NotNull(zeroDone.Result.Torn);
+        Assert.Single(zeroDone.Result.Torn);
+        Assert.True(zeroDone.Result.Torn[0].Torn);
 
         var err = JsonSerializer.Deserialize<ScanStreamEvent>(
             """{"event":"error","error":"network unreachable"}""");
@@ -340,7 +374,7 @@ public sealed class WarpscoutTests : IDisposable
             Assert.Equal("Cloudflare", empty.DisplayLocation);
             Assert.Equal("—", empty.DisplayNode);
             Assert.Equal("—", empty.DisplayPing);
-            Assert.Equal("0%", empty.DisplayLoss);
+            Assert.Equal("—", empty.DisplayLoss);
             Assert.Equal("—", empty.DisplaySpeed);
             Assert.Equal(Strings.Instance.RowProxyStart, empty.ProxyButtonText);
 
@@ -351,7 +385,7 @@ public sealed class WarpscoutTests : IDisposable
                 Location = "Amsterdam, NL",
                 Node = "AMS",
                 PingMs = 64.4,
-                Loss = 2.6,
+                Loss = 0,
                 SpeedMbps = 85.24,
                 IsProxied = true,
             };
@@ -360,6 +394,8 @@ public sealed class WarpscoutTests : IDisposable
             Assert.Equal("Amsterdam, NL", withLocation.DisplayLocation);
             Assert.Equal("AMS", withLocation.DisplayNode);
             Assert.Equal("64 ms", withLocation.DisplayPing);
+            Assert.Equal("0%", withLocation.DisplayLoss);
+            withLocation.Loss = 2.6;
             Assert.Equal("3%", withLocation.DisplayLoss);
             Assert.Equal("85.2 Mbps", withLocation.DisplaySpeed);
             Assert.Equal(Strings.Instance.RowProxyActive, withLocation.ProxyButtonText);
@@ -549,7 +585,7 @@ public sealed class WarpscoutTests : IDisposable
                     Location = "Amsterdam, NL",
                     PingMs = 41.0,
                     TunPingMs = 43.0,
-                    Loss = 1.5,
+                    Loss = null,
                     SpeedMbps = 120.8,
                 },
             ],
@@ -579,6 +615,7 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Equal(95.4, first.SpeedMbps);
 
         Assert.Equal("162.159.198.2:443", loaded.Endpoints[1].Endpoint);
+        Assert.Null(loaded.Endpoints[1].Loss);
     }
 
     [Fact]
@@ -723,5 +760,81 @@ public sealed class WarpscoutTests : IDisposable
     public void NotifyIconDataSize_MatchesWin32StructLayout()
     {
         Assert.Equal(IntPtr.Size == 8 ? 976 : 956, MainWindow.NotifyIconDataSize);
+    }
+
+    [Fact]
+    public void CoreService_TargetsUpstreamRepoAndDetectsAutoUpgrade()
+    {
+        Assert.Equal("vernette/warpscout", CoreService.CoreGithubRepo);
+        Assert.Equal("https://api.github.com/repos/vernette/warpscout/releases/latest", CoreService.GithubLatestApi);
+
+        Assert.True(CoreService.ShouldAutoUpgradeCore("", new AppSettings()));
+        Assert.True(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, new AppSettings { CoreRepo = "" }));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(CoreService.DefaultDownloadedCorePath, new AppSettings { CoreRepo = "vernette/warpscout" }));
+        Assert.False(CoreService.ShouldAutoUpgradeCore(@"C:\custom\warpscout.exe", new AppSettings { CoreRepo = "" }));
+    }
+
+    [Fact]
+    public void EndpointItem_FromScanEndpoint_MapsFullAndNullFields()
+    {
+        var full = EndpointItem.FromScanEndpoint(new ScanEndpoint
+        {
+            Endpoint = "162.159.192.1:2408",
+            SeenAs = "NL",
+            Node = "AMS",
+            NodeCity = "Amsterdam",
+            NodeCountry = "NL",
+            PingMs = 35.4,
+            TunPingMs = 41.2,
+            LossPct = 5.0,
+            SpeedMbps = 98.7,
+        }, isProxied: true);
+        Assert.Equal("162.159.192.1:2408", full.Endpoint);
+        Assert.Equal("AMS", full.Node);
+        Assert.Equal("NL", full.Country);
+        Assert.Equal("Amsterdam", full.City);
+        Assert.Equal("NL", full.Location);
+        Assert.Equal(35.4, full.PingMs);
+        Assert.Equal(41.2, full.TunPingMs);
+        Assert.Equal(5.0, full.Loss);
+        Assert.Equal(98.7, full.SpeedMbps);
+        Assert.True(full.IsProxied);
+
+        var sparse = EndpointItem.FromScanEndpoint(new ScanEndpoint { Endpoint = "162.159.192.2:2408" });
+        Assert.Equal("", sparse.Node);
+        Assert.Equal("", sparse.Country);
+        Assert.Equal("", sparse.City);
+        Assert.Equal("", sparse.Location);
+        Assert.Equal(0, sparse.PingMs);
+        Assert.Equal(0, sparse.TunPingMs);
+        Assert.Null(sparse.Loss);
+        Assert.Equal(0, sparse.SpeedMbps);
+        Assert.False(sparse.IsProxied);
+    }
+
+    [Fact]
+    public void CompareEndpoints_OrdersByLossThenEffectivePing()
+    {
+        var lowLossHighPing = new EndpointItem { Endpoint = "a", Loss = 0, TunPingMs = 120 };
+        var higherLossLowPing = new EndpointItem { Endpoint = "b", Loss = 10, TunPingMs = 20 };
+        var nullLossMediumPing = new EndpointItem { Endpoint = "c", Loss = null, PingMs = 60 };
+
+        Assert.True(MainWindow.CompareEndpoints(lowLossHighPing, higherLossLowPing) < 0);
+        Assert.True(MainWindow.CompareEndpoints(nullLossMediumPing, lowLossHighPing) < 0);
+        Assert.True(MainWindow.CompareEndpoints(nullLossMediumPing, higherLossLowPing) < 0);
+    }
+
+    [Fact]
+    public void Strings_V1StreamAndLogHelpers_FormatCleanly()
+    {
+        var s = Strings.Instance;
+        s.SetLanguage("en");
+        Assert.False(string.IsNullOrWhiteSpace(s.PhasePorts));
+        Assert.False(string.IsNullOrWhiteSpace(s.PhaseTunnels));
+        Assert.Equal("~ TORN 162.159.192.1:2408 (FRA)", s.LogEndpointTorn("162.159.192.1:2408", "FRA"));
+        Assert.Equal("+ FOUND 162.159.192.1:2408 | — | ping=— tun=— loss=—", s.LogEndpointFound("162.159.192.1:2408", "", "", "—", null, null, null, ""));
+        Assert.Equal("+ FOUND 162.159.192.1:2408 | DE Frankfurt (FRA) | ping=40ms tun=50ms loss=10%", s.LogEndpointFound("162.159.192.1:2408", "DE", "Frankfurt", "FRA", 40, 50, 10, ""));
+        Assert.Equal("Done: 5 working servers, torn: 2, best: 162.159.192.1:2408", s.LogScanDone(5, "162.159.192.1:2408", 2));
+        Assert.Equal("Done: 5 working servers, best: 162.159.192.1:2408", s.LogScanDone(5, "162.159.192.1:2408"));
     }
 }

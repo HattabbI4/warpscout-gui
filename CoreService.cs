@@ -11,7 +11,8 @@ namespace WarpscoutGui;
 public static class CoreService
 {
     private const string DefaultAwgI1 = "<r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>";
-    private const string GithubLatestApi = "https://api.github.com/repos/HattabbI4/warpscout/releases/latest";
+    public const string CoreGithubRepo = "vernette/warpscout";
+    internal const string GithubLatestApi = $"https://api.github.com/repos/{CoreGithubRepo}/releases/latest";
 
     private static readonly HttpClient Http = CreateHttpClient();
     private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
@@ -154,6 +155,14 @@ public static class CoreService
         return "";
     }
 
+    internal static bool ShouldAutoUpgradeCore(string resolvedCorePath, AppSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(resolvedCorePath))
+            return true;
+        return !string.Equals(settings.CoreRepo, CoreGithubRepo, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(Path.GetFullPath(resolvedCorePath), Path.GetFullPath(DefaultDownloadedCorePath), StringComparison.OrdinalIgnoreCase);
+    }
+
     public static async Task<string> GetCoreVersionAsync(string corePath)
     {
         if (string.IsNullOrWhiteSpace(corePath) || !File.Exists(corePath)) return "";
@@ -183,7 +192,8 @@ public static class CoreService
         string? currentCorePath,
         Action? onBeforeReplace,
         IProgress<(double percent, string status)> progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool forceUpdate = false)
     {
         if (string.IsNullOrWhiteSpace(targetPath))
             targetPath = DefaultDownloadedCorePath;
@@ -201,7 +211,7 @@ public static class CoreService
         var checkPath = !string.IsNullOrWhiteSpace(currentCorePath) && File.Exists(currentCorePath)
             ? currentCorePath
             : targetPath;
-        if (File.Exists(checkPath))
+        if (!forceUpdate && File.Exists(checkPath))
         {
             var installedVer = await GetCoreVersionAsync(checkPath);
             var normInstalled = installedVer.Trim().TrimStart('v', 'V');
