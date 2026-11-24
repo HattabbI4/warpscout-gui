@@ -10,7 +10,7 @@
     <RootNamespace>WarpscoutGui</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>HattabbI4</Authors>
     <Product>Warpscout GUI</Product>
     <Description>Нативный клиент Windows 10/11 (Fluent 2) для сканера Cloudflare WARP warpscout</Description>
