@@ -69,34 +69,14 @@ jobs:
       - name: Release notes
         env:
           GH_TOKEN: ${{ github.token }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.GEMINI_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
           git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
-          VERSION="${GITHUB_REF_NAME#v}"
-          DL_BASE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
-          STANDALONE="warpscout-gui_${VERSION}_windows_amd64_standalone.exe"
-          LITE="warpscout-gui_${VERSION}_windows_amd64_lite.exe"
-
-          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
-          RANGE="${PREV:+$PREV..}${GITHUB_REF_NAME}"
-          NOTE=$(git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME")
-          {
-            [ -n "$NOTE" ] && printf '%s\n\n' "$NOTE"
-            echo "## Скачать"
-            echo
-            echo "- 📦 **[${STANDALONE}](${DL_BASE}/${STANDALONE})** — **автономная версия (со встроенными библиотеками .NET 8)**. Работает сразу на любой Windows 10/11 (x64) без установки дополнительного ПО (~66 МБ)."
-            echo "- ⚡ **[${LITE}](${DL_BASE}/${LITE})** — **облегчённая версия (без встроенных библиотек)**. Требует установленного в системе [.NET 8 Desktop Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) (~6 МБ)."
-            echo
-            echo "## Commits"
-            echo
-            git -P log --no-merges \
-              -E --invert-grep --grep='^docs(\(.*\))?:' \
-              --pretty="- %s ([\`%h\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/%H))" \
-              "$RANGE"
-            echo
-            gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-              -f tag_name="${GITHUB_REF_NAME}" ${PREV:+-f previous_tag_name="$PREV"} \
-              --jq .body | awk '/^## New Contributors/{f=1} f || /^\*\*Full Changelog\*\*/'
-          } > body.md
+          python3 .github/scripts/generate_release_notes.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --output body.md
 
       - uses: actions/download-artifact@v4
         with:
