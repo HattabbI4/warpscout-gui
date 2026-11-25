@@ -56,59 +56,6 @@
                 </Setter>
             </Style>
 
-            <!-- Reusable GitHub Star Header Tile (right side of page headers) -->
-            <Style x:Key="GithubHeaderTileStyle" TargetType="Button">
-                <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderThickness" Value="0" />
-                <Setter Property="Cursor" Value="Hand" />
-                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-                <Setter Property="VerticalAlignment" Value="Center" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd"
-                                    Background="{TemplateBinding Background}"
-                                    CornerRadius="4"
-                                    Padding="10,6"
-                                    SnapsToDevicePixels="True">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Image Source="{StaticResource GithubOctocatIcon}"
-                                           Width="22" Height="22"
-                                           VerticalAlignment="Center"
-                                           RenderOptions.BitmapScalingMode="HighQuality" />
-                                    <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock Text="GitHub"
-                                                   FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,1,0,0">
-                                            <Image Source="{StaticResource FluentStarColorIcon}"
-                                                   Width="12" Height="12"
-                                                   Margin="0,0,4,0" VerticalAlignment="Center"
-                                                   RenderOptions.BitmapScalingMode="HighQuality" />
-                                            <TextBlock Text="{Binding GithubStarText, Source={x:Static local:Strings.Instance}}"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                       VerticalAlignment="Center" />
-                                            <ui:SymbolIcon Symbol="Open16" FontSize="11"
-                                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                                           Margin="4,1,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
             <Style x:Key="SectionHeaderTextStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="13" />
                 <Setter Property="FontWeight" Value="SemiBold" />
@@ -517,22 +464,13 @@
                     <ScrollViewer x:Name="PageScanner" VerticalScrollBarVisibility="Auto">
                         <Grid Margin="36,12,36,36">
                             <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch">
-                                <!-- Page Header Row -->
-                                <Grid Margin="0,0,0,20">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="TxtScannerPageTitle"
-                                               Text="{Binding ScannerTitle, Source={x:Static local:Strings.Instance}}"
-                                               FontFamily="{StaticResource AppDisplayFont}"
-                                               FontSize="28" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                               VerticalAlignment="Center" />
-                                    <Button Grid.Column="1"
-                                            Style="{StaticResource GithubHeaderTileStyle}"
-                                            Click="BtnGithubStar_Click" />
-                                </Grid>
+                                <!-- Page Header -->
+                                <TextBlock x:Name="TxtScannerPageTitle"
+                                           Text="{Binding ScannerTitle, Source={x:Static local:Strings.Instance}}"
+                                           FontFamily="{StaticResource AppDisplayFont}"
+                                           FontSize="28" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Margin="0,0,0,20" />
 
                                 <!-- GUI Update Notification Banner -->
                                 <Border x:Name="GuiUpdateBanner"
@@ -1075,18 +1013,14 @@
                                                Margin="0,4,0,0" />
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Style="{StaticResource GithubHeaderTileStyle}"
-                                            Margin="0,0,10,0"
-                                            Click="BtnGithubStar_Click" />
-                                    <ui:Button x:Name="BtnRefreshServers"
-                                               Content="{Binding BtnFindServers, Source={x:Static local:Strings.Instance}}"
-                                               Icon="{ui:SymbolIcon ArrowSync16}"
-                                               Appearance="Primary"
-                                               Height="32" Padding="14,0" FontSize="13"
-                                               VerticalAlignment="Center"
-                                               Click="BtnScan_Click" />
-                                </StackPanel>
+                                <ui:Button x:Name="BtnRefreshServers"
+                                           Grid.Column="1"
+                                           Content="{Binding BtnFindServers, Source={x:Static local:Strings.Instance}}"
+                                           Icon="{ui:SymbolIcon ArrowSync16}"
+                                           Appearance="Primary"
+                                           Height="32" Padding="14,0" FontSize="13"
+                                           VerticalAlignment="Center"
+                                           Click="BtnScan_Click" />
                             </Grid>
 
                             <Border Grid.Row="1"
@@ -1329,21 +1263,12 @@
                     <ScrollViewer x:Name="PageSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
                         <Grid Margin="36,12,36,36">
                             <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch">
-                                <!-- Page Header Row (pure typography + GitHub Header Tile) -->
-                                <Grid Margin="0,0,0,20">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding SettingsTitle, Source={x:Static local:Strings.Instance}}"
-                                               FontFamily="{StaticResource AppDisplayFont}"
-                                               FontSize="28" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                               VerticalAlignment="Center" />
-                                    <Button Grid.Column="1"
-                                            Style="{StaticResource GithubHeaderTileStyle}"
-                                            Click="BtnGithubStar_Click" />
-                                </Grid>
+                                <!-- Page Header -->
+                                <TextBlock Text="{Binding SettingsTitle, Source={x:Static local:Strings.Instance}}"
+                                           FontFamily="{StaticResource AppDisplayFont}"
+                                           FontSize="28" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           Margin="0,0,0,20" />
 
                                 <!-- Section: App Updates -->
                                 <TextBlock Text="{Binding GuiUpdateSectionHeader, Source={x:Static local:Strings.Instance}}"

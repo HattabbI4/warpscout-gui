@@ -645,6 +645,29 @@ public sealed class WarpscoutTests : IDisposable
     }
 
     [Fact]
+    public void EndpointItem_DisplaySpeed_UsesLocaleDecimalSeparator()
+    {
+        var prevLang = Strings.Instance.IsEnglish ? "en" : "ru";
+        try
+        {
+            var item = new EndpointItem { SpeedMbps = 248.4 };
+
+            Strings.Instance.SetLanguage("en");
+            Assert.Equal("248.4 Mbps", item.DisplaySpeed);
+
+            Strings.Instance.SetLanguage("ru");
+            Assert.Equal("248,4 Мбит/с", item.DisplaySpeed);
+
+            item.SpeedMbps = 0;
+            Assert.Equal("—", item.DisplaySpeed);
+        }
+        finally
+        {
+            Strings.Instance.SetLanguage(prevLang);
+        }
+    }
+
+    [Fact]
     public void GithubCorner_RepoUrlAndLocalizedStringsMatchRequirements()
     {
         Assert.Equal("https://github.com/HattabbI4/warpscout-gui", MainWindow.GithubRepoUrl);

@@ -304,7 +304,9 @@ public sealed class EndpointItem : INotifyPropertyChanged
     public string DisplayPing => EffectivePingMs < 9999 ? $"{Math.Round(EffectivePingMs)} {Strings.Instance.UnitMs}" : "—";
     public System.Windows.Media.Brush PingBrush => EffectivePingMs < 80 ? BrushGreen : (EffectivePingMs < 150 ? BrushAmber : BrushRed);
     public string DisplayLoss => Loss.HasValue ? $"{Math.Round(Loss.Value)}%" : "—";
-    public string DisplaySpeed => SpeedMbps > 0 ? $"{SpeedMbps:0.0} {Strings.Instance.UnitMbps}" : "—";
+    public string DisplaySpeed => SpeedMbps > 0
+        ? $"{SpeedMbps.ToString("0.0", Strings.Instance.IsEnglish ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo("ru-RU"))} {Strings.Instance.UnitMbps}"
+        : "—";
     public string ProxyButtonText => IsProxied ? Strings.Instance.RowProxyActive : Strings.Instance.RowProxyStart;
 
     internal static EndpointItem FromScanEndpoint(ScanEndpoint ep, bool isProxied = false) => new()
