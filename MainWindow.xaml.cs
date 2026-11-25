@@ -11,7 +11,6 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Wpf.Ui.Controls;
 using Drawing = System.Drawing;
@@ -26,48 +25,13 @@ public partial class MainWindow : FluentWindow
     [GeneratedRegex(@"(\*\*[^*]+\*\*|`[^`]+`)")]
     private static partial Regex InlineMarkdownRegex();
 
-    private static readonly SolidColorBrush BrushCardBg = FreezeBrush(14, 255, 255, 255);
-    private static readonly SolidColorBrush BrushCardBorder = FreezeBrush(28, 255, 255, 255);
-    private static readonly SolidColorBrush BrushCardCurrentBorder = FreezeBrush(110, 96, 205, 255);
-    private static readonly SolidColorBrush BrushDivider = FreezeBrush(24, 255, 255, 255);
-    private static readonly SolidColorBrush BrushMuted = FreezeBrush(255, 156, 163, 175);
-    private static readonly SolidColorBrush BrushSubheading = FreezeBrush(255, 229, 231, 235);
-    private static readonly SolidColorBrush BrushBodyText = FreezeBrush(255, 209, 213, 219);
-    private static readonly SolidColorBrush BrushAccent = FreezeBrush(255, 96, 205, 255);
-    private static readonly SolidColorBrush BrushCode = FreezeBrush(255, 147, 197, 253);
-    private static readonly System.Windows.Media.FontFamily ConsolasFont = new("Consolas");
-    private static readonly (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) BadgeCurrentBrushes = CreateBadgeBrushes(16, 185, 129);
-    private static readonly (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) BadgeLatestBrushes = CreateBadgeBrushes(59, 130, 246);
-    private static readonly (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) BadgeReadyBrushes = CreateBadgeBrushes(96, 205, 255);
+    private static readonly System.Windows.Media.FontFamily FallbackMonoFont = new("Cascadia Mono, Consolas");
 
-    private static (SolidColorBrush, SolidColorBrush, SolidColorBrush) CreateBadgeBrushes(byte r, byte g, byte b) =>
-        (FreezeBrush(42, r, g, b), FreezeBrush(110, r, g, b), FreezeBrush(255, r, g, b));
+    private System.Windows.Media.Brush ThemeBrush(string key) =>
+        TryFindResource(key) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Transparent;
 
-    private static SolidColorBrush FreezeBrush(byte a, byte r, byte g, byte b)
-    {
-        var br = new SolidColorBrush(System.Windows.Media.Color.FromArgb(a, r, g, b));
-        br.Freeze();
-        return br;
-    }
-
-    private static readonly DependencyProperty GithubCornerProgressProperty =
-        DependencyProperty.Register(
-            nameof(GithubCornerProgress),
-            typeof(double),
-            typeof(MainWindow),
-            new PropertyMetadata(0.0, OnGithubCornerProgressChanged));
-
-    private double GithubCornerProgress
-    {
-        get => (double)GetValue(GithubCornerProgressProperty);
-        set => SetValue(GithubCornerProgressProperty, value);
-    }
-
-    private static void OnGithubCornerProgressChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is MainWindow win)
-            win.UpdateGithubCornerVisuals((double)e.NewValue);
-    }
+    private System.Windows.Media.FontFamily MonoFont =>
+        TryFindResource("AppMonoFont") as System.Windows.Media.FontFamily ?? FallbackMonoFont;
 
     private readonly AppSettings _settings;
     private readonly ObservableCollection<EndpointItem> _endpoints = [];
@@ -94,8 +58,6 @@ public partial class MainWindow : FluentWindow
     private bool _isAdvancedScanMode;
     private bool _isExiting;
     private bool _isInitializing = true;
-    private bool _githubCornerPressed;
-    private readonly DispatcherTimer _githubCornerHoverTimer;
 
     private readonly Version _guiCurrentVersion;
     private readonly string _guiBuildVariant;
@@ -125,14 +87,6 @@ public partial class MainWindow : FluentWindow
     public MainWindow()
     {
         InitializeComponent();
-        UpdateGithubCornerVisuals(0.0);
-        _githubCornerHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
-        _githubCornerHoverTimer.Tick += (_, _) =>
-        {
-            _githubCornerHoverTimer.Stop();
-            if (GithubCornerHost.IsMouseOver)
-                AnimateGithubCorner(true);
-        };
         _settings = CoreService.LoadSettings();
         _guiCurrentVersion = GuiUpdateService.GetCurrentVersion();
         _guiBuildVariant = GuiUpdateService.GetBuildVariant();
@@ -382,41 +336,37 @@ public partial class MainWindow : FluentWindow
         PageServers.Visibility = page == "servers" ? Visibility.Visible : Visibility.Collapsed;
         PageSettings.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
 
-        var activeBg = new SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 255, 255));
+        var activeBg = ThemeBrush("SubtleFillColorSecondaryBrush");
         var clear = System.Windows.Media.Brushes.Transparent;
-        var accent = new SolidColorBrush(System.Windows.Media.Color.FromRgb(96, 205, 255));
-        var dimIcon = new SolidColorBrush(System.Windows.Media.Color.FromRgb(209, 213, 219));
-        var dimText = new SolidColorBrush(System.Windows.Media.Color.FromRgb(229, 231, 235));
-        var white = System.Windows.Media.Brushes.White;
+        var accent = ThemeBrush("SystemAccentBrush");
 
-        ApplyNavItemState(NavScanner, IndScanner, IconScanner, TxtNavScanner, page == "scanner", activeBg, clear, accent, dimIcon, white, dimText);
-        ApplyNavItemState(NavAdvanced, IndAdvanced, IconAdvanced, TxtNavAdvanced, page == "advanced", activeBg, clear, accent, dimIcon, white, dimText);
-        ApplyNavItemState(NavServers, IndServers, IconServers, TxtNavServers, page == "servers", activeBg, clear, accent, dimIcon, white, dimText);
-        ApplyNavItemState(NavSettings, IndSettings, IconSettings, TxtNavSettings, page == "settings", activeBg, clear, accent, dimIcon, white, dimText);
+        ApplyNavItemState(NavScanner, IndScanner, page == "scanner", activeBg, clear, accent);
+        ApplyNavItemState(NavAdvanced, IndAdvanced, page == "advanced", activeBg, clear, accent);
+        ApplyNavItemState(NavServers, IndServers, page == "servers", activeBg, clear, accent);
+        ApplyNavItemState(NavSettings, IndSettings, page == "settings", activeBg, clear, accent);
     }
 
     private static void ApplyNavItemState(
-        System.Windows.Controls.Button btn, Border ind, SymbolIcon icon, System.Windows.Controls.TextBlock label, bool active,
-        System.Windows.Media.Brush activeBg, System.Windows.Media.Brush clear, System.Windows.Media.Brush accent,
-        System.Windows.Media.Brush dimIcon, System.Windows.Media.Brush white, System.Windows.Media.Brush dimText)
+        System.Windows.Controls.Button btn, Border ind, bool active,
+        System.Windows.Media.Brush activeBg, System.Windows.Media.Brush clear, System.Windows.Media.Brush accent)
     {
         btn.Background = active ? activeBg : clear;
         ind.Background = active ? accent : clear;
-        icon.Foreground = active ? accent : dimIcon;
-        label.Foreground = active ? white : dimText;
-        label.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
     }
 
     private void SetSidebarCollapsed(bool collapsed)
     {
         _isSidebarCollapsed = collapsed;
-        SidebarCol.Width = new GridLength(collapsed ? 56 : 232);
+        SidebarCol.Width = new GridLength(collapsed ? 56 : 244);
         var labelVis = collapsed ? Visibility.Collapsed : Visibility.Visible;
         SidebarBrandText.Visibility = labelVis;
         TxtNavScanner.Visibility = labelVis;
         TxtNavAdvanced.Visibility = labelVis;
         TxtNavServers.Visibility = labelVis;
         TxtNavSettings.Visibility = labelVis;
+        SidebarGithubText.Visibility = labelVis;
+        SidebarGithubExternalIcon.Visibility = labelVis;
+        SidebarGithubCollapsedStar.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
         NavServersBadge.Visibility = !collapsed && _endpoints.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         NavSettingsUpdateDot.Visibility = !collapsed && _latestNewerGuiRelease != null ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -434,109 +384,13 @@ public partial class MainWindow : FluentWindow
     private void BtnGoToServers_Click(object sender, RoutedEventArgs e) => SelectPage("servers");
     private void BtnGoToScanner_Click(object sender, RoutedEventArgs e) => SelectPage(_isAdvancedScanMode ? "advanced" : "scanner");
 
-    private void GithubCorner_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    private void BtnGithubStar_Click(object sender, RoutedEventArgs e)
     {
-        _githubCornerHoverTimer.Stop();
-        _githubCornerHoverTimer.Start();
-    }
-
-    private void GithubCorner_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        _githubCornerHoverTimer.Stop();
-        _githubCornerPressed = false;
-        AnimateGithubCorner(false);
-    }
-
-    private void GithubCorner_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _githubCornerPressed = true;
-        e.Handled = true;
-    }
-
-    private void GithubCorner_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (!_githubCornerPressed) return;
-        _githubCornerPressed = false;
-        e.Handled = true;
         try
         {
             using var _ = Process.Start(new ProcessStartInfo(GithubRepoUrl) { UseShellExecute = true });
         }
         catch { }
-    }
-
-    private void AnimateGithubCorner(bool open)
-    {
-        var anim = new DoubleAnimation(
-            open ? 1.0 : 0.0,
-            TimeSpan.FromMilliseconds(open ? 260 : 210))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-        };
-        BeginAnimation(GithubCornerProgressProperty, anim, HandoffBehavior.SnapshotAndReplace);
-    }
-
-    internal void UpdateGithubCornerVisuals(double p)
-    {
-        p = Math.Clamp(p, 0.0, 1.0);
-        const double box = 140.0;
-        double s = 50.0 + 82.0 * p;
-        double edge = box - s;
-
-        System.Windows.Point Pt(double u, double v) => new(edge + s * u, edge + s * v);
-
-        var revealTri = new StreamGeometry();
-        using (var ctx = revealTri.Open())
-        {
-            ctx.BeginFigure(new System.Windows.Point(edge, box), isFilled: true, isClosed: true);
-            ctx.LineTo(new System.Windows.Point(box, edge), isStroked: true, isSmoothJoin: false);
-            ctx.LineTo(new System.Windows.Point(box, box), isStroked: true, isSmoothJoin: false);
-        }
-        revealTri.Freeze();
-        GithubCornerRevealLayer.Clip = revealTri;
-        GithubCornerRevealBg.Data = revealTri;
-
-        double d = 0.22 * s;
-        var creaseShadow = new StreamGeometry();
-        using (var ctx = creaseShadow.Open())
-        {
-            ctx.BeginFigure(new System.Windows.Point(edge, box), isFilled: true, isClosed: true);
-            ctx.LineTo(new System.Windows.Point(box, edge), isStroked: false, isSmoothJoin: false);
-            ctx.LineTo(new System.Windows.Point(box, edge + d), isStroked: false, isSmoothJoin: false);
-            ctx.LineTo(new System.Windows.Point(edge + d, box), isStroked: false, isSmoothJoin: false);
-        }
-        creaseShadow.Freeze();
-        GithubCornerCreaseShadow.Data = creaseShadow;
-
-        double glowR = 0.36 * s;
-        double glowC = box - 0.22 * s;
-        GithubCornerGlow.Width = glowR * 2;
-        GithubCornerGlow.Height = glowR * 2;
-        Canvas.SetLeft(GithubCornerGlow, glowC - glowR);
-        Canvas.SetTop(GithubCornerGlow, glowC - glowR);
-
-        var flapGeo = new StreamGeometry();
-        using (var ctx = flapGeo.Open())
-        {
-            ctx.BeginFigure(Pt(0.00, 1.00), isFilled: true, isClosed: true);
-            ctx.BezierTo(Pt(0.05, 0.78), Pt(0.145, 0.485), Pt(0.18, 0.38), isStroked: true, isSmoothJoin: true);
-            ctx.QuadraticBezierTo(Pt(0.23, 0.23), Pt(0.38, 0.18), isStroked: true, isSmoothJoin: true);
-            ctx.BezierTo(Pt(0.485, 0.145), Pt(0.78, 0.05), Pt(1.00, 0.00), isStroked: true, isSmoothJoin: true);
-        }
-        flapGeo.Freeze();
-        GithubCornerFlapPath.Data = flapGeo;
-
-        double octoScale = 0.77 + 0.40 * p;
-        GithubCornerOctoScale.ScaleX = octoScale;
-        GithubCornerOctoScale.ScaleY = octoScale;
-        GithubCornerOctoRotate.Angle = -6.0 * p;
-
-        double octoOffset = 111.0 - 9.0 * p;
-        GithubCornerOctoTranslate.X = octoOffset;
-        GithubCornerOctoTranslate.Y = octoOffset;
-
-        GithubCornerCta.Opacity = Math.Clamp((p - 0.25) / 0.75, 0.0, 1.0);
-        GithubCornerStarGlint.Opacity = Math.Clamp((p - 0.45) / 0.55, 0.0, 1.0);
     }
 
     private async Task RefreshCoreAndAccountAsync()
@@ -564,9 +418,7 @@ public partial class MainWindow : FluentWindow
         var s = Strings.Instance;
         if (!string.IsNullOrEmpty(_corePath))
         {
-            StatusDot.Fill = new SolidColorBrush(_account != null
-                ? System.Windows.Media.Color.FromRgb(16, 185, 129)
-                : System.Windows.Media.Color.FromRgb(245, 158, 11));
+            StatusDot.Fill = ThemeBrush(_account != null ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush");
 
             var verShown = string.IsNullOrEmpty(_coreVersion) ? s.CoreFoundFallback : _coreVersion;
             TxtStatusPill.Text = _account != null ? s.StatusPillReady(verShown) : s.StatusPillNoKey(verShown);
@@ -577,7 +429,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            StatusDot.Fill = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+            StatusDot.Fill = ThemeBrush("SystemFillColorCriticalBrush");
             TxtStatusPill.Text = s.StatusPillMissing;
             TxtCoreVersionCard.Text = s.CoreVersionMissing;
             TxtAccountDetails.Text = _account != null ? $"ID: {_account.ID}" : s.AccountRequiresCore;
@@ -620,12 +472,8 @@ public partial class MainWindow : FluentWindow
     private void ShowCoreNotice(bool isError, string title, string message)
     {
         CoreNoticePanel.Visibility = Visibility.Visible;
-        CoreNoticePanel.Background = new SolidColorBrush(isError
-            ? System.Windows.Media.Color.FromArgb(40, 239, 68, 68)
-            : System.Windows.Media.Color.FromArgb(35, 16, 185, 129));
-        CoreNoticePanel.BorderBrush = new SolidColorBrush(isError
-            ? System.Windows.Media.Color.FromArgb(120, 239, 68, 68)
-            : System.Windows.Media.Color.FromArgb(120, 16, 185, 129));
+        CoreNoticePanel.Background = ThemeBrush(isError ? "SystemFillColorCriticalBackgroundBrush" : "SystemFillColorSuccessBackgroundBrush");
+        CoreNoticePanel.BorderBrush = ThemeBrush("CardBorderBrush");
         TxtCoreNoticeTitle.Text = title;
         TxtCoreNoticeMessage.Text = message;
         BtnRetryDownload.Visibility = isError ? Visibility.Visible : Visibility.Collapsed;
@@ -1097,23 +945,24 @@ public partial class MainWindow : FluentWindow
         var s = Strings.Instance;
         var lang = s.IsEnglish ? "en" : "ru";
         var latestTag = _guiReleases.FirstOrDefault()?.TagName;
+        var textPrimary = ThemeBrush("TextFillColorPrimaryBrush");
+        var textSecondary = ThemeBrush("TextFillColorSecondaryBrush");
+        var divider = ThemeBrush("DividerStrokeColorDefaultBrush");
 
-        foreach (var rel in _guiReleases)
+        for (int idx = 0; idx < _guiReleases.Count; idx++)
         {
+            var rel = _guiReleases[idx];
             bool isCurrent = rel.Version == _guiCurrentVersion;
             bool isLatest = string.Equals(rel.TagName, latestTag, StringComparison.OrdinalIgnoreCase);
             bool isStaged = IsReleaseStaged(rel);
             bool canAction = GuiUpdateService.CanInstallOrRollback(rel.Version, _guiCurrentVersion);
             bool isExpanded = _expandedChangelogTags.Contains(rel.TagName);
 
-            var card = new Border
+            var rowHost = new Border
             {
-                Background = BrushCardBg,
-                BorderBrush = isCurrent ? BrushCardCurrentBorder : BrushCardBorder,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(12, 10, 12, 10),
-                Margin = new Thickness(0, 0, 0, 6),
+                BorderBrush = divider,
+                BorderThickness = new Thickness(0, idx > 0 ? 1 : 0, 0, 0),
+                Padding = new Thickness(48, 12, 16, 12),
             };
 
             var root = new StackPanel();
@@ -1126,19 +975,20 @@ public partial class MainWindow : FluentWindow
             titleRow.Children.Add(new System.Windows.Controls.TextBlock
             {
                 Text = rel.TagName,
-                FontSize = 13.5,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = System.Windows.Media.Brushes.White,
+                FontFamily = MonoFont,
+                FontSize = 14,
+                FontWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = textPrimary,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
             });
 
             if (isCurrent)
-                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeCurrent, BadgeCurrentBrushes));
+                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeCurrent, "SystemFillColorSuccessBackgroundBrush", "SystemFillColorSuccessBrush"));
             if (isLatest)
-                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeLatest, BadgeLatestBrushes));
+                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeLatest, "SystemFillColorAttentionBackgroundBrush", "AccentTextFillColorPrimaryBrush"));
             if (isStaged)
-                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeReady, BadgeReadyBrushes));
+                titleRow.Children.Add(CreateVersionBadge(s.GuiBadgeReady, "SystemFillColorAttentionBackgroundBrush", "AccentTextFillColorPrimaryBrush"));
 
             var metaParts = new List<string>();
             if (rel.PublishedAt != DateTimeOffset.MinValue)
@@ -1152,8 +1002,8 @@ public partial class MainWindow : FluentWindow
                 left.Children.Add(new System.Windows.Controls.TextBlock
                 {
                     Text = string.Join(" · ", metaParts),
-                    FontSize = 11,
-                    Foreground = BrushMuted,
+                    FontSize = 12,
+                    Foreground = textSecondary,
                     Margin = new Thickness(0, 2, 0, 0),
                 });
             }
@@ -1176,8 +1026,9 @@ public partial class MainWindow : FluentWindow
                     Appearance = isStaged || rel.Version > _guiCurrentVersion
                         ? ControlAppearance.Primary
                         : ControlAppearance.Secondary,
-                    Padding = new Thickness(10, 4, 10, 4),
-                    FontSize = 11.5,
+                    Height = 28,
+                    Padding = new Thickness(10, 0, 10, 0),
+                    FontSize = 12,
                     Margin = new Thickness(0, 0, 6, 0),
                     IsEnabled = !_isDownloadingGuiUpdate,
                 };
@@ -1191,8 +1042,8 @@ public partial class MainWindow : FluentWindow
                 {
                     Text = s.GuiViewOnly,
                     ToolTip = s.GuiViewOnlyTooltip,
-                    FontSize = 11.5,
-                    Foreground = BrushMuted,
+                    FontSize = 12,
+                    Foreground = textSecondary,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0),
                 });
@@ -1202,8 +1053,9 @@ public partial class MainWindow : FluentWindow
             {
                 Content = isExpanded ? s.BtnHideChanges : s.BtnShowChanges,
                 Appearance = ControlAppearance.Transparent,
-                Padding = new Thickness(8, 4, 8, 4),
-                FontSize = 11.5,
+                Height = 28,
+                Padding = new Thickness(10, 0, 10, 0),
+                FontSize = 12,
             };
             var tagKey = rel.TagName;
             toggleBtn.Click += (_, _) =>
@@ -1224,47 +1076,47 @@ public partial class MainWindow : FluentWindow
                     ? (UIElement)new System.Windows.Controls.TextBlock
                     {
                         Text = s.GuiNoChangelog,
-                        FontSize = 11.5,
-                        Foreground = BrushMuted,
+                        FontSize = 12,
+                        Foreground = textSecondary,
                     }
                     : BuildChangelogPanel(notes);
 
                 root.Children.Add(new Border
                 {
-                    BorderBrush = BrushDivider,
-                    BorderThickness = new Thickness(0, 1, 0, 0),
                     Margin = new Thickness(0, 8, 0, 0),
-                    Padding = new Thickness(0, 8, 0, 0),
+                    Padding = new Thickness(0, 4, 0, 0),
                     Child = bodyPanel,
                 });
             }
 
-            card.Child = root;
-            GuiReleasesHost.Children.Add(card);
+            rowHost.Child = root;
+            GuiReleasesHost.Children.Add(rowHost);
         }
     }
 
-    private static Border CreateVersionBadge(string text, (SolidColorBrush Bg, SolidColorBrush Border, SolidColorBrush Fg) brushes) => new()
+    private Border CreateVersionBadge(string text, string bgKey, string fgKey) => new()
     {
-        Background = brushes.Bg,
-        BorderBrush = brushes.Border,
-        BorderThickness = new Thickness(1),
+        Background = ThemeBrush(bgKey),
         CornerRadius = new CornerRadius(4),
-        Padding = new Thickness(6, 1, 6, 1),
+        Padding = new Thickness(7, 2, 7, 2),
         Margin = new Thickness(0, 0, 6, 0),
         VerticalAlignment = VerticalAlignment.Center,
         Child = new System.Windows.Controls.TextBlock
         {
             Text = text,
-            FontSize = 10.5,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = brushes.Fg,
+            FontSize = 12,
+            FontWeight = FontWeights.Normal,
+            Foreground = ThemeBrush(fgKey),
         },
     };
 
-    private static StackPanel BuildChangelogPanel(string markdown)
+    private StackPanel BuildChangelogPanel(string markdown)
     {
         var panel = new StackPanel();
+        var textPrimary = ThemeBrush("TextFillColorPrimaryBrush");
+        var textSecondary = ThemeBrush("TextFillColorSecondaryBrush");
+        var accent = ThemeBrush("AccentTextFillColorPrimaryBrush");
+
         foreach (var raw in markdown.Split('\n'))
         {
             var line = raw.Trim();
@@ -1277,36 +1129,36 @@ public partial class MainWindow : FluentWindow
                 {
                     FontSize = 12,
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = BrushSubheading,
+                    Foreground = textPrimary,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, panel.Children.Count > 0 ? 6 : 0, 0, 2),
                 };
-                AppendInlineMarkdownRuns(tb.Inlines, heading);
+                AppendInlineMarkdownRuns(tb.Inlines, heading, textPrimary, accent);
                 panel.Children.Add(tb);
             }
             else if (line.StartsWith("- ", StringComparison.Ordinal) || line.StartsWith("* ", StringComparison.Ordinal))
             {
-                var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+                var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
                 var bullet = new System.Windows.Controls.TextBlock
                 {
                     Text = "•",
-                    FontSize = 11.5,
-                    Foreground = BrushAccent,
-                    Margin = new Thickness(4, 0, 7, 0),
+                    FontSize = 12,
+                    Foreground = accent,
+                    Margin = new Thickness(2, 0, 8, 0),
                 };
                 Grid.SetColumn(bullet, 0);
                 row.Children.Add(bullet);
 
                 var tb = new System.Windows.Controls.TextBlock
                 {
-                    FontSize = 11.5,
-                    Foreground = BrushBodyText,
+                    FontSize = 12,
+                    Foreground = textSecondary,
                     TextWrapping = TextWrapping.Wrap,
                 };
-                AppendInlineMarkdownRuns(tb.Inlines, line[2..].Trim());
+                AppendInlineMarkdownRuns(tb.Inlines, line[2..].Trim(), textPrimary, accent);
                 Grid.SetColumn(tb, 1);
                 row.Children.Add(tb);
                 panel.Children.Add(row);
@@ -1315,19 +1167,23 @@ public partial class MainWindow : FluentWindow
             {
                 var tb = new System.Windows.Controls.TextBlock
                 {
-                    FontSize = 11.5,
-                    Foreground = BrushBodyText,
+                    FontSize = 12,
+                    Foreground = textSecondary,
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 1, 0, 1),
+                    Margin = new Thickness(0, 2, 0, 2),
                 };
-                AppendInlineMarkdownRuns(tb.Inlines, line);
+                AppendInlineMarkdownRuns(tb.Inlines, line, textPrimary, accent);
                 panel.Children.Add(tb);
             }
         }
         return panel;
     }
 
-    private static void AppendInlineMarkdownRuns(InlineCollection inlines, string text)
+    private void AppendInlineMarkdownRuns(
+        InlineCollection inlines,
+        string text,
+        System.Windows.Media.Brush boldBrush,
+        System.Windows.Media.Brush codeBrush)
     {
         int pos = 0;
         foreach (Match m in InlineMarkdownRegex().Matches(text))
@@ -1341,15 +1197,15 @@ public partial class MainWindow : FluentWindow
                 inlines.Add(new Run(tok[2..^2])
                 {
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = System.Windows.Media.Brushes.White,
+                    Foreground = boldBrush,
                 });
             }
             else
             {
                 inlines.Add(new Run(tok[1..^1])
                 {
-                    FontFamily = ConsolasFont,
-                    Foreground = BrushCode,
+                    FontFamily = MonoFont,
+                    Foreground = codeBrush,
                 });
             }
             pos = m.Index + m.Length;
@@ -1538,7 +1394,7 @@ public partial class MainWindow : FluentWindow
         };
         var flags = new List<string> { s.HeroProto(protoLabel) };
         if (isAwg31 && awg31Parts.Count > 0)
-            flags.AddRange(awg31Parts);
+            flags.Add(s.HeroAwg31Configured(awg31Parts.Count));
         if (!isMasque && ChkDme.IsChecked == true)
         {
             var nodes = ParseExcludedNodes(TxtExcludeNode?.Text);
@@ -1555,10 +1411,11 @@ public partial class MainWindow : FluentWindow
     {
         var s = Strings.Instance;
         BtnScan.Content = enabled ? s.BtnFindServers : s.BtnStopScan;
-        BtnScan.Icon = new SymbolIcon(enabled ? SymbolRegular.Play24 : SymbolRegular.Stop24);
+        BtnScan.Icon = new SymbolIcon(enabled ? SymbolRegular.Play16 : SymbolRegular.Stop16);
         BtnScan.Appearance = enabled ? ControlAppearance.Primary : ControlAppearance.Danger;
 
         BtnRefreshServers.Content = enabled ? s.BtnFindServers : s.BtnStopScan;
+        BtnRefreshServers.Icon = new SymbolIcon(enabled ? SymbolRegular.ArrowSync16 : SymbolRegular.Stop16);
         BtnRefreshServers.Appearance = enabled ? ControlAppearance.Primary : ControlAppearance.Danger;
 
         TxtHeroTitle.Text = enabled ? s.HeroReady : s.HeroScanning;
@@ -1928,8 +1785,10 @@ public partial class MainWindow : FluentWindow
         for (int i = 0; i < _endpoints.Count; i++)
             _endpoints[i].IsBest = hasExplicitBest ? _endpoints[i].Endpoint == _bestEndpoint : i == 0;
 
-        EmptyTablePanel.Visibility = _endpoints.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-        NavServersBadge.Visibility = !_isSidebarCollapsed && _endpoints.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        bool hasEndpoints = _endpoints.Count > 0;
+        GridEndpoints.Visibility = hasEndpoints ? Visibility.Visible : Visibility.Collapsed;
+        EmptyTablePanel.Visibility = hasEndpoints ? Visibility.Collapsed : Visibility.Visible;
+        NavServersBadge.Visibility = !_isSidebarCollapsed && hasEndpoints ? Visibility.Visible : Visibility.Collapsed;
         TxtNavServersBadge.Text = _endpoints.Count.ToString();
         TxtScanCount.Text = s.ScanFoundCount(_endpoints.Count);
 
@@ -2324,7 +2183,6 @@ public partial class MainWindow : FluentWindow
             SyncAwg31FromUI();
             CoreService.SaveSettings(_settings);
         }
-        _githubCornerHoverTimer.Stop();
         StopScanProcess();
         StopSocksProcess();
         if (_trayIcon != null)

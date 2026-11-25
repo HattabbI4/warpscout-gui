@@ -32,8 +32,10 @@ public sealed class Strings : INotifyPropertyChanged
     public string NavServers => T("Серверы", "Servers");
     public string NavSettings => T("Настройки", "Settings");
 
-    // GitHub Star Corner
-    public string GithubStarText => T("Спасибо за звезду", "Star on GitHub");
+    // GitHub Star CTA & Toggles
+    public string GithubStarText => T("Поставить звезду", "Star on GitHub");
+    public string ToggleOn => T("Вкл.", "On");
+    public string ToggleOff => T("Откл.", "Off");
 
     // Global Banners
     public string CoreDownloadTitle => T("Обновление / скачивание ядра warpscout.exe", "Updating / downloading warpscout.exe core");
@@ -72,32 +74,32 @@ public sealed class Strings : INotifyPropertyChanged
     public string Awg31CardActiveDesc(string summary) => T(
         $"Активно: {summary} · Требуется клиент AmneziaWG 3.1",
         $"Active: {summary} · Requires AmneziaWG 3.1 client");
-    public string Awg31PaddingTitle => T("Добавление паддинга (-padding)", "Data packet padding (-padding)");
+    public string Awg31PaddingTitle => T("Добавление паддинга", "Data packet padding");
     public string Awg31PaddingDesc => T(
         "Случайные байты внутри каждого пакета с данными (N или MIN-MAX, рекомендуется до 128)",
         "Random bytes inside every data packet (N or MIN-MAX, keep up to ~128)");
     public string Awg31PaddingPlaceholder => T("напр. 16-128", "e.g. 16-128");
-    public string Awg31RandomTrailersTitle => T("Случайный хвост (-random-trailers)", "Random trailers (-random-trailers)");
+    public string Awg31RandomTrailersTitle => T("Случайный хвост", "Random trailers");
     public string Awg31RandomTrailersDesc => T(
         "Добавлять случайные байты к пакетам рукопожатия и нули внутрь пакетов с данными",
         "Append random bytes to handshake packets and zeroes inside data packets");
-    public string Awg31DisableCookiesTitle => T("Отключить cookie (-disable-cookies)", "Disable cookies (-disable-cookies)");
+    public string Awg31DisableCookiesTitle => T("Отключить cookie", "Disable cookies");
     public string Awg31DisableCookiesDesc => T(
         "Не отправлять cookie reply при активном пробинге",
         "Never send cookie replies under active probing");
-    public string Awg31TimingsHeader => T("Тайминги и повторы рукопожатия (N или MIN-MAX)", "Handshake timings & retries (N or MIN-MAX)");
-    public string Awg31RekeyAfterLabel => T("Rekey после, сек (-rekey-after)", "Rekey after, sec (-rekey-after)");
+    public string Awg31TimingsHeader => T("Тайминги рукопожатия (сек, N или MIN-MAX)", "Handshake timings (sec, N or MIN-MAX)");
+    public string Awg31RekeyAfterLabel => T("Rekey после", "Rekey after");
     public string Awg31RekeyAfterPlaceholder => T("по умолч.: 120", "default: 120");
-    public string Awg31RejectAfterLabel => T("Reject после, сек (-reject-after)", "Reject after, sec (-reject-after)");
+    public string Awg31RejectAfterLabel => T("Reject после", "Reject after");
     public string Awg31RejectAfterPlaceholder => T("по умолч.: 180", "default: 180");
     public string Awg31RejectAfterTooltip => T(
         "Не ставьте меньше rekey-after (по умолчанию 120), иначе ключи истекут раньше обновления",
         "Do not set below rekey-after (120 by default), or keys expire before rekey");
-    public string Awg31RekeyTimeoutLabel => T("Таймаут rekey, сек (-rekey-timeout)", "Rekey timeout, sec (-rekey-timeout)");
+    public string Awg31RekeyTimeoutLabel => T("Таймаут rekey", "Rekey timeout");
     public string Awg31RekeyTimeoutPlaceholder => T("по умолч.: 5", "default: 5");
-    public string Awg31KeepaliveTimeoutLabel => T("Таймаут keepalive, сек (-keepalive-timeout)", "Keepalive timeout, sec (-keepalive-timeout)");
+    public string Awg31KeepaliveTimeoutLabel => T("Таймаут keepalive", "Keepalive timeout");
     public string Awg31KeepaliveTimeoutPlaceholder => T("по умолч.: 10", "default: 10");
-    public string Awg31MaxHandshakesLabel => T("Попытки рукопожатия (-max-handshakes)", "Max handshakes (-max-handshakes)");
+    public string Awg31MaxHandshakesLabel => T("Попытки рукопожатия", "Max handshakes");
     public string Awg31MaxHandshakesPlaceholder => T("по умолч.: 18", "default: 18");
     public string Awg31InvalidRangeErr(string flag, string val) => T(
         $"Неверный формат {flag} «{val}»: ожидается число N или диапазон MIN-MAX (MIN ≤ MAX)",
@@ -108,11 +110,11 @@ public sealed class Strings : INotifyPropertyChanged
     public string ExcludeNodeMasqueTooltip => T(
         "Недоступно для MASQUE: в этом протоколе все эндпоинты выходят через один узел",
         "Unavailable for MASQUE: in this protocol all endpoints exit through the same node");
-    public string TunPingTitle => T("Пинг внутри туннеля (-P)", "In-tunnel ping (-P)");
+    public string TunPingTitle => T("Пинг внутри туннеля", "In-tunnel ping");
     public string TunPingDesc => T("Проверять реальную задержку и потери пакетов до 1.1.1.1 через поднятый туннель", "Measure real latency and packet loss to 1.1.1.1 through the active tunnel");
-    public string FullScanTitle => T("Полное сканирование подсетей (-f)", "Full subnet scan (-f)");
-    public string FullScanDesc => T("Перебирать все 256 адресов в подсетях вместо быстрой выборки (-sample 5)", "Scan all 256 addresses in subnets instead of quick sampling (-sample 5)");
-    public string SpeedTestTitle => T("Тест скорости (-speed)", "Speed test (-speed)");
+    public string FullScanTitle => T("Полное сканирование подсетей", "Full subnet scan");
+    public string FullScanDesc => T("Перебирать все 256 адресов в каждой подсети вместо быстрой выборки", "Scan all 256 addresses in each subnet instead of quick sampling");
+    public string SpeedTestTitle => T("Тест скорости", "Speed test");
     public string SpeedTestDesc => T("Замерять скорость скачивания у лучших найденных серверов после скана", "Measure download speed on the best discovered servers after scanning");
 
     // Advanced Scanner
@@ -142,14 +144,13 @@ public sealed class Strings : INotifyPropertyChanged
     public string ColLoss => T("Потери", "Loss");
     public string ColSpeed => T("Скорость", "Speed");
     public string ColActions => T("Действия", "Actions");
-    public string BtnRowConf => T("⬇ .conf", "⬇ .conf");
+    public string BtnRowConf => ".conf";
     public string EmptyTableInitial => T("Список пуст — запустите сканирование на вкладке «Сканер»", "List is empty — start a scan in the Scanner tab");
     public string BtnGoToScanner => T("Перейти в Сканер", "Go to Scanner");
 
     // Settings Page
     public string SettingsTitle => T("Настройки", "Settings");
-    public string SettingsSubtitle => T("Путь к ядру warpscout.exe, обновления, ключ WARP, язык и системный трей", "Core binary path, updates, WARP key, language, and system tray");
-    public string CoreSectionHeader => T("Ядро сканера (warpscout.exe)", "Scanner Core (warpscout.exe)");
+    public string CoreSectionHeader => T("Ядро сканера", "Scanner Core");
     public string CoreBinaryTitle => T("Исполняемый файл ядра", "Core executable");
     public string CoreBinaryDesc => T("Укажите путь или имя файла вручную либо выберите кнопкой «Обзор...»", "Enter the file path manually or pick it with «Browse...»");
     public string CorePathPlaceholder => T("Автопоиск warpscout.exe", "Auto-detect warpscout.exe");
@@ -160,7 +161,7 @@ public sealed class Strings : INotifyPropertyChanged
     public string AccountKeyTitle => T("Ключ устройства WARP", "WARP device key");
     public string AccountChecking => T("Проверка аккаунта...", "Checking account...");
     public string BtnRegenerateKey => T("Пересоздать ключ", "Regenerate key");
-    public string AppSectionHeader => T("Поведение окна, язык и прокси", "Window, Language & Proxy");
+    public string AppSectionHeader => T("Приложение", "Application");
     public string LanguageTitle => T("Язык интерфейса", "Interface language");
     public string LanguageDesc => T("Переключение языка интерфейса приложения (RU / EN)", "Switch application UI language (RU / EN)");
     public string TrayTitle => T("Сворачивать в системный трей", "Minimize to system tray");
@@ -183,8 +184,8 @@ public sealed class Strings : INotifyPropertyChanged
     // Table Row Units & Buttons (Models.cs)
     public string UnitMs => T("мс", "ms");
     public string UnitMbps => T("Мбит/с", "Mbps");
-    public string RowProxyActive => T("🟢 Активен", "🟢 Active");
-    public string RowProxyStart => T("⚡ Прокси :1080", "⚡ Proxy :1080");
+    public string RowProxyActive => T("Активен", "Active");
+    public string RowProxyStart => T("Прокси :1080", "Proxy :1080");
 
     // Tray Menu
     public string TrayShow => T("Показать Warpscout", "Show Warpscout");
@@ -263,7 +264,8 @@ public sealed class Strings : INotifyPropertyChanged
     public string HeroCustomFlags(string custom) => T($"Флаги: {custom}", $"Flags: {custom}");
     public string HeroProto(string protoLabel) => T($"Протокол {protoLabel}", $"Protocol: {protoLabel}");
     public string HeroExcludeNode(string node) => T($"Исключить узел: {node}", $"Exclude node: {node}");
-    public string HeroPing => T("Пинг (-P)", "Ping (-P)");
+    public string HeroPing => T("пинг внутри туннеля", "in-tunnel ping");
+    public string HeroAwg31Configured(int count) => T($"параметры AWG 3.1 ({count})", $"AWG 3.1 options ({count})");
     public string HeroFullScan => T("Полный скан", "Full scan");
     public string HeroSpeed => T("Скорость", "Speed");
 
@@ -317,11 +319,11 @@ public sealed class Strings : INotifyPropertyChanged
 
     public string ScanFoundCount(int count) => T($"Найдено: {count}", $"Found: {count}");
     public string BestServerTitle(string badge, string loc, string node) => T(
-        $"★ Лучший сервер: {badge} {loc} ({node})",
-        $"★ Best server: {badge} {loc} ({node})");
+        $"Лучший сервер · {badge} {loc} ({node})",
+        $"Best server · {badge} {loc} ({node})");
     public string BestServerSubtitle(string ep, string ping, string loss) => T(
-        $"{ep} · Пинг: {ping} · Потери: {loss}",
-        $"{ep} · Ping: {ping} · Loss: {loss}");
+        $"{ep} · {ping} · Потери: {loss}",
+        $"{ep} · {ping} · Loss: {loss}");
     public string ScanStoppedErrorPhase => T("Остановлено из-за ошибки", "Stopped due to error");
     public string LogErrorPrefix => T("ОШИБКА", "ERROR");
     public string CopiedEndpoint(string ep) => T($"Скопировано в буфер обмена: {ep}", $"Copied to clipboard: {ep}");
@@ -351,7 +353,7 @@ public sealed class Strings : INotifyPropertyChanged
         "Установится при выходе или нажмите, чтобы обновить сейчас",
         "Installs on exit, or click to update now");
 
-    public string GuiUpdateSectionHeader => T("Обновление приложения (Warpscout GUI)", "Application Updates (Warpscout GUI)");
+    public string GuiUpdateSectionHeader => T("Обновление приложения", "Application Updates");
     public string GuiUpdateCurrentTitle(string ver, string variant) => $"Warpscout GUI v{ver} ({variant})";
     public string GuiUpdateStatusIdle => T("Проверка обновлений ещё не выполнялась", "Updates have not been checked yet");
     public string GuiUpdateStatusChecking => T("Проверка обновлений на GitHub...", "Checking GitHub for updates...");

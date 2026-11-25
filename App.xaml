@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:WarpscoutGui"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
@@ -10,8 +11,14 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
-            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#59FFFFFF" />
+            <FontFamily x:Key="AppUiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+            <FontFamily x:Key="AppDisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+            <FontFamily x:Key="AppMonoFont">Cascadia Mono, Consolas</FontFamily>
+
+            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#73FFFFFF" />
             <Style TargetType="{x:Type ui:TextBox}" BasedOn="{StaticResource DefaultUiTextBoxStyle}">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Padding" Value="10,5" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                         <Setter Property="PlaceholderEnabled" Value="False" />
@@ -19,181 +26,396 @@
                 </Style.Triggers>
             </Style>
 
-            <!-- Windows 11 Fluent 3D Vector Icon: Shield + Network Globe -->
-            <DrawingImage x:Key="FluentShieldGlobeIcon">
+            <Style TargetType="{x:Type ui:CardControl}" BasedOn="{StaticResource DefaultUiCardControlStyle}">
+                <Setter Property="Padding" Value="16,14" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+
+            <Style TargetType="{x:Type ui:CardExpander}" BasedOn="{StaticResource DefaultUiCardExpanderStyle}">
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+
+            <!-- Windows 11 Settings / MagicPods ToggleSwitch: On/Off text on the left so pills align on the right -->
+            <Style TargetType="{x:Type ui:ToggleSwitch}" BasedOn="{StaticResource DefaultUiToggleSwitchStyle}">
+                <Setter Property="OnContent" Value="{Binding ToggleOn, Source={x:Static local:Strings.Instance}}" />
+                <Setter Property="OffContent" Value="{Binding ToggleOff, Source={x:Static local:Strings.Instance}}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="HorizontalContentAlignment" Value="Right" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:ToggleSwitch">
+                            <Grid Background="Transparent">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter x:Name="ContentPresenter"
+                                                  Grid.Column="0"
+                                                  MinWidth="34"
+                                                  Margin="0,0,10,0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  Content="{TemplateBinding Content}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                <Grid Grid.Column="1" Width="40" Height="20">
+                                    <Rectangle x:Name="ToggleRectangle"
+                                               Width="40" Height="20"
+                                               RadiusX="10" RadiusY="10"
+                                               Fill="{DynamicResource ToggleSwitchFillOff}"
+                                               Stroke="{DynamicResource ToggleSwitchStrokeOff}"
+                                               StrokeThickness="1" />
+                                    <Rectangle x:Name="ActiveToggleRectangle"
+                                               Width="40" Height="20"
+                                               RadiusX="10" RadiusY="10"
+                                               Fill="{TemplateBinding Background}"
+                                               StrokeThickness="0"
+                                               Opacity="0" />
+                                    <Ellipse x:Name="ToggleEllipse"
+                                             Width="12" Height="12"
+                                             Fill="{DynamicResource ToggleSwitchKnobFillOff}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Ellipse.RenderTransform>
+                                            <TranslateTransform X="-9" />
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                    <Ellipse x:Name="ActiveToggleEllipse"
+                                             Width="12" Height="12"
+                                             Fill="{DynamicResource ToggleSwitchKnobFillOn}"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                                             Opacity="0">
+                                        <Ellipse.RenderTransform>
+                                            <TranslateTransform X="-9" />
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="Content" Value="{x:Null}" />
+                                        <Condition Property="OnContent" Value="{x:Null}" />
+                                        <Condition Property="OffContent" Value="{x:Null}" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ContentPresenter" Property="Visibility" Value="Collapsed" />
+                                </MultiTrigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ToggleRectangle" Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleRectangle" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-9" To="9" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="-9" To="9" Duration="0:0:0.15" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ToggleRectangle" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleRectangle" Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="9" To="-9" Duration="0:0:0.15" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" From="9" To="-9" Duration="0:0:0.15" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="Content" Value="{x:Null}" />
+                                        <Condition Property="IsChecked" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ContentPresenter" Property="Content" Value="{Binding OnContent, RelativeSource={RelativeSource TemplatedParent}}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="Content" Value="{x:Null}" />
+                                        <Condition Property="IsChecked" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ContentPresenter" Property="Content" Value="{Binding OffContent, RelativeSource={RelativeSource TemplatedParent}}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                        <Condition Property="IsChecked" Value="False" />
+                                        <Condition Property="IsEnabled" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOffPointerOver}" />
+                                    <Setter TargetName="ToggleRectangle" Property="Stroke" Value="{DynamicResource ToggleSwitchStrokeOffPointerOver}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOffPointerOver}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                        <Condition Property="IsChecked" Value="True" />
+                                        <Condition Property="IsEnabled" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter Property="Background" Value="{DynamicResource ToggleSwitchFillOnPointerOver}" />
+                                    <Setter TargetName="ToggleRectangle" Property="Stroke" Value="{DynamicResource ToggleSwitchStrokeOnPointerOver}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOnPointerOver}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsChecked" Value="False" />
+                                        <Condition Property="IsEnabled" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ToggleRectangle" Property="Stroke" Value="{DynamicResource ToggleSwitchStrokeOffDisabled}" />
+                                    <Setter TargetName="ToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOffDisabled}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOffDisabled}" />
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="{DynamicResource ToggleSwitchContentForegroundDisabled}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsChecked" Value="True" />
+                                        <Condition Property="IsEnabled" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ActiveToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOnDisabled}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOnDisabled}" />
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="{DynamicResource ToggleSwitchContentForegroundDisabled}" />
+                                </MultiTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Official Microsoft Fluent UI System Icons Color (MIT, github.com/microsoft/fluentui-system-icons) -->
+            <!-- ic_fluent_globe_shield_24_color -->
+            <DrawingImage x:Key="FluentScannerColorIcon">
                 <DrawingImage.Drawing>
                     <DrawingGroup>
-                        <!-- Soft ambient shadow -->
+                        <GeometryDrawing Brush="Transparent">
+                            <GeometryDrawing.Geometry>
+                                <RectangleGeometry Rect="0,0,24,24" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
                         <GeometryDrawing>
                             <GeometryDrawing.Brush>
-                                <RadialGradientBrush Center="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
-                                    <GradientStop Color="#4400B7C3" Offset="0.2" />
-                                    <GradientStop Color="#000078D4" Offset="1" />
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="6.44444,5.33333" EndPoint="20.8889,18.6667">
+                                    <GradientStop Color="#29C3FF" Offset="0" />
+                                    <GradientStop Color="#2052CB" Offset="1" />
+                                </LinearGradientBrush>
+                            </GeometryDrawing.Brush>
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="Nonzero" Figures="M12 22C17.5229 22 22 17.5228 22 12C22 6.47715 17.5229 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <RadialGradientBrush MappingMode="Absolute" Opacity="0.7" Center="0,0" GradientOrigin="0,0" RadiusX="1" RadiusY="1">
+                                    <RadialGradientBrush.Transform>
+                                        <TransformGroup>
+                                            <ScaleTransform ScaleX="8.40145" ScaleY="8.40145" />
+                                            <RotateTransform Angle="180" />
+                                            <TranslateTransform X="18.1719" Y="17.1563" />
+                                        </TransformGroup>
+                                    </RadialGradientBrush.Transform>
+                                    <GradientStop Color="#003580" Offset="0" />
+                                    <GradientStop Color="#00003580" Offset="1" />
                                 </RadialGradientBrush>
                             </GeometryDrawing.Brush>
                             <GeometryDrawing.Geometry>
-                                <EllipseGeometry Center="24,24" RadiusX="23" RadiusY="23" />
+                                <PathGeometry FillRule="Nonzero" Figures="M12 22C17.5229 22 22 17.5228 22 12C22 6.47715 17.5229 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
-                        <!-- 3D Blue/Cyan Globe -->
                         <GeometryDrawing>
                             <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0.15,0.1" EndPoint="0.85,0.9">
-                                    <GradientStop Color="#60CDFF" Offset="0" />
-                                    <GradientStop Color="#0078D4" Offset="0.55" />
-                                    <GradientStop Color="#003E92" Offset="1" />
+                                <RadialGradientBrush MappingMode="Absolute" Opacity="0.2" Center="0,0" GradientOrigin="0,0" RadiusX="1" RadiusY="1">
+                                    <RadialGradientBrush.Transform>
+                                        <TransformGroup>
+                                            <ScaleTransform ScaleX="13.1566" ScaleY="14.272" />
+                                            <RotateTransform Angle="37.2782" />
+                                            <TranslateTransform X="18.5625" Y="17" />
+                                        </TransformGroup>
+                                    </RadialGradientBrush.Transform>
+                                    <GradientStop Color="#1B44B1" Offset="0.411967" />
+                                    <GradientStop Color="#001B44B1" Offset="1" />
+                                </RadialGradientBrush>
+                            </GeometryDrawing.Brush>
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="Nonzero" Figures="M12 22C17.5229 22 22 17.5228 22 12C22 6.47715 17.5229 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <RadialGradientBrush MappingMode="Absolute" Center="0,0" GradientOrigin="0,0" RadiusX="1" RadiusY="1">
+                                    <RadialGradientBrush.Transform>
+                                        <TransformGroup>
+                                            <ScaleTransform ScaleX="15.1197" ScaleY="16.1498" />
+                                            <RotateTransform Angle="44.678" />
+                                            <TranslateTransform X="18.3242" Y="17.003" />
+                                        </TransformGroup>
+                                    </RadialGradientBrush.Transform>
+                                    <GradientStop Color="#003BD5FF" Offset="0.445" />
+                                    <GradientStop Color="#3BD5FF" Offset="0.815" />
+                                </RadialGradientBrush>
+                            </GeometryDrawing.Brush>
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="EvenOdd" Figures="M9.11512 2.42239C8.79412 2.9207 8.51113 3.49638 8.26549 4.12602C7.78548 5.35643 7.42649 6.84886 7.21573 8.5H2.62952C2.44889 8.98338 2.30459 9.48449 2.19995 10H7.06861C7.02329 10.6505 6.99992 11.319 6.99992 12C6.99992 13.0354 7.05395 14.0418 7.15698 15H2.45772C2.6209 15.5196 2.82534 16.0208 3.06721 16.5H7.36473C7.57964 17.7553 7.88443 18.8972 8.26549 19.874C8.51113 20.5036 8.79412 21.0793 9.11512 21.5776C10.0285 21.8524 10.997 22 11.9999 22C13.0028 22 13.9713 21.8524 14.8847 21.5776C15.2057 21.0793 15.4887 20.5036 15.7343 19.874C16.1154 18.8972 16.4202 17.7553 16.6351 16.5H20.9326C21.1745 16.0208 21.3789 15.5196 21.5421 15H16.8429C16.9459 14.0418 16.9999 13.0354 16.9999 12C16.9999 11.319 16.9765 10.6505 16.9312 10H21.7999C21.6952 9.48449 21.5509 8.98338 21.3703 8.5H16.7841C16.5733 6.84886 16.2144 5.35643 15.7343 4.12602C15.4887 3.49638 15.2057 2.9207 14.8847 2.42239C13.9713 2.14765 13.0028 2 11.9999 2C10.997 2 10.0285 2.14765 9.11512 2.42239ZM8.72869 8.5C8.92864 7.03063 9.25123 5.72645 9.66291 4.67118C10.0219 3.75104 10.4336 3.05889 10.8573 2.60897C11.2773 2.16296 11.662 2 11.9999 2C12.3378 2 12.7225 2.16296 13.1425 2.60897C13.5662 3.05889 13.9779 3.75104 14.3369 4.67118C14.7486 5.72645 15.0712 7.03063 15.2711 8.5H8.72869ZM11.9999 22C12.3378 22 12.7225 21.837 13.1425 21.391C13.5662 20.9411 13.9779 20.249 14.3369 19.3288C14.6526 18.5197 14.9159 17.5641 15.1117 16.5H8.88817C9.08395 17.5641 9.34724 18.5197 9.66291 19.3288C10.0219 20.249 10.4336 20.9411 10.8573 21.391C11.2773 21.837 11.662 22 11.9999 22ZM8.49992 12C8.49992 13.0476 8.5581 14.0545 8.66615 15H15.3337C15.4417 14.0545 15.4999 13.0476 15.4999 12C15.4999 11.3139 15.475 10.6453 15.4274 10H8.57244C8.52487 10.6453 8.49992 11.3139 8.49992 12Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="14.875,11" EndPoint="23.9366,21.8209">
+                                    <GradientStop Color="#62BE55" Offset="0" />
+                                    <GradientStop Color="#1E794A" Offset="1" />
                                 </LinearGradientBrush>
                             </GeometryDrawing.Brush>
                             <GeometryDrawing.Geometry>
-                                <EllipseGeometry Center="21,21" RadiusX="15" RadiusY="15" />
-                            </GeometryDrawing.Geometry>
-                        </GeometryDrawing>
-                        <!-- Glass meridian rings -->
-                        <GeometryDrawing>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1.3" Brush="#77FFFFFF" />
-                            </GeometryDrawing.Pen>
-                            <GeometryDrawing.Geometry>
-                                <EllipseGeometry Center="21,21" RadiusX="7" RadiusY="15" />
-                            </GeometryDrawing.Geometry>
-                        </GeometryDrawing>
-                        <GeometryDrawing>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1.2" Brush="#66FFFFFF" />
-                            </GeometryDrawing.Pen>
-                            <GeometryDrawing.Geometry>
-                                <LineGeometry StartPoint="6.5,21" EndPoint="35.5,21" />
-                            </GeometryDrawing.Geometry>
-                        </GeometryDrawing>
-                        <!-- Frosted Glass Shield Badge -->
-                        <GeometryDrawing>
-                            <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0.1,0" EndPoint="0.9,1">
-                                    <GradientStop Color="#E050E6FF" Offset="0" />
-                                    <GradientStop Color="#E010B981" Offset="0.55" />
-                                    <GradientStop Color="#F0047857" Offset="1" />
-                                </LinearGradientBrush>
-                            </GeometryDrawing.Brush>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1.2" Brush="#CCFFFFFF" />
-                            </GeometryDrawing.Pen>
-                            <GeometryDrawing.Geometry>
-                                <PathGeometry Figures="M 32,20 L 42,23.5 L 42,31 C 42,37 37.5,41 32,43.5 C 26.5,41 22,37 22,31 L 22,23.5 Z" />
-                            </GeometryDrawing.Geometry>
-                        </GeometryDrawing>
-                        <!-- Shield checkmark -->
-                        <GeometryDrawing>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="2.2" Brush="White" StartLineCap="Round" EndLineCap="Round" LineJoin="Round" />
-                            </GeometryDrawing.Pen>
-                            <GeometryDrawing.Geometry>
-                                <PathGeometry Figures="M 27.5,31.5 L 30.8,34.8 L 36.8,28.2" />
+                                <PathGeometry FillRule="Nonzero" Figures="M22.5003 13.0105C20.5935 12.8379 19.0662 11.7237 18.3851 11.1395C18.1682 10.9535 17.8321 10.9535 17.6152 11.1395C16.9339 11.7236 15.4061 12.8378 13.4995 13.0105C13.2245 13.0354 13 13.2571 13 13.5333L13.0002 17.0332C13.0002 21.2557 17.0937 22.7492 17.8729 22.9953C17.9562 23.0216 18.0441 23.0216 18.1274 22.9953C18.9066 22.7492 22.9998 21.2557 22.9998 17.0332L22.9998 13.5332C22.9999 13.2571 22.7753 13.0354 22.5003 13.0105Z" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
                     </DrawingGroup>
                 </DrawingImage.Drawing>
             </DrawingImage>
 
-            <!-- Windows 11 Fluent 3D Vector Icon: Stacked Servers -->
-            <DrawingImage x:Key="FluentServerStackIcon">
+            <!-- ic_fluent_code_block_24_color -->
+            <DrawingImage x:Key="FluentAdvancedColorIcon">
                 <DrawingImage.Drawing>
                     <DrawingGroup>
-                        <!-- Bottom Server Blade -->
-                        <GeometryDrawing>
-                            <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#4F46E5" Offset="0" />
-                                    <GradientStop Color="#312E81" Offset="1" />
-                                </LinearGradientBrush>
-                            </GeometryDrawing.Brush>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1" Brush="#55FFFFFF" />
-                            </GeometryDrawing.Pen>
+                        <GeometryDrawing Brush="Transparent">
                             <GeometryDrawing.Geometry>
-                                <RectangleGeometry Rect="6,29,36,11" RadiusX="4" RadiusY="4" />
+                                <RectangleGeometry Rect="0,0,24,24" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
-                        <!-- Middle Server Blade -->
                         <GeometryDrawing>
                             <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#3B82F6" Offset="0" />
-                                    <GradientStop Color="#1D4ED8" Offset="1" />
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="7.38879,3" EndPoint="17.2602,21">
+                                    <GradientStop Color="#E67EEA" Offset="0.0281195" />
+                                    <GradientStop Color="#AD64D7" Offset="0.43755" />
+                                    <GradientStop Color="#794DC5" Offset="1" />
                                 </LinearGradientBrush>
                             </GeometryDrawing.Brush>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1" Brush="#77FFFFFF" />
-                            </GeometryDrawing.Pen>
                             <GeometryDrawing.Geometry>
-                                <RectangleGeometry Rect="6,17,36,11" RadiusX="4" RadiusY="4" />
+                                <PathGeometry FillRule="Nonzero" Figures="M3 6.25C3 4.45508 4.45507 3 6.25 3H17.75C19.5449 3 21 4.45507 21 6.25V17.75C21 19.5449 19.5449 21 17.75 21H6.25C4.45508 21 3 19.5449 3 17.75V6.25Z" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
-                        <!-- Top Server Blade -->
                         <GeometryDrawing>
                             <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#60CDFF" Offset="0" />
-                                    <GradientStop Color="#0078D4" Offset="1" />
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="8.84518,8.30774" EndPoint="13.5444,20.4717">
+                                    <GradientStop Color="#FDFDFD" Offset="0" />
+                                    <GradientStop Color="#F9DCFA" Offset="1" />
                                 </LinearGradientBrush>
                             </GeometryDrawing.Brush>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1" Brush="#99FFFFFF" />
-                            </GeometryDrawing.Pen>
                             <GeometryDrawing.Geometry>
-                                <RectangleGeometry Rect="6,5,36,11" RadiusX="4" RadiusY="4" />
-                            </GeometryDrawing.Geometry>
-                        </GeometryDrawing>
-                        <!-- Status LEDs -->
-                        <GeometryDrawing Brush="#6EE7B7">
-                            <GeometryDrawing.Geometry>
-                                <GeometryGroup>
-                                    <EllipseGeometry Center="12,10.5" RadiusX="2" RadiusY="2" />
-                                    <EllipseGeometry Center="12,22.5" RadiusX="2" RadiusY="2" />
-                                    <EllipseGeometry Center="12,34.5" RadiusX="2" RadiusY="2" />
-                                </GeometryGroup>
+                                <PathGeometry FillRule="Nonzero" Figures="M10.5303 9.28033L7.81066 12L10.5303 14.7197C10.8232 15.0126 10.8232 15.4874 10.5303 15.7803C10.2374 16.0732 9.76256 16.0732 9.46967 15.7803L6.21967 12.5303C5.92678 12.2374 5.92678 11.7626 6.21967 11.4697L9.46967 8.21967C9.76256 7.92678 10.2374 7.92678 10.5303 8.21967C10.8232 8.51256 10.8232 8.98744 10.5303 9.28033ZM14.5303 8.21967L17.7803 11.4697C18.0732 11.7626 18.0732 12.2374 17.7803 12.5303L14.5303 15.7803C14.2374 16.0732 13.7626 16.0732 13.4697 15.7803C13.1768 15.4874 13.1768 15.0126 13.4697 14.7197L16.1893 12L13.4697 9.28033C13.1768 8.98744 13.1768 8.51256 13.4697 8.21967C13.7626 7.92678 14.2374 7.92678 14.5303 8.21967Z" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
                     </DrawingGroup>
                 </DrawingImage.Drawing>
             </DrawingImage>
 
-            <!-- Windows 11 Fluent 3D Vector Icon: Settings Gear -->
-            <DrawingImage x:Key="FluentCoreGearIcon">
+            <!-- ic_fluent_database_24_color -->
+            <DrawingImage x:Key="FluentServersColorIcon">
                 <DrawingImage.Drawing>
                     <DrawingGroup>
-                        <!-- Outer Gear Ring -->
-                        <GeometryDrawing>
-                            <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0.1,0.1" EndPoint="0.9,0.9">
-                                    <GradientStop Color="#94A3B8" Offset="0" />
-                                    <GradientStop Color="#475569" Offset="1" />
-                                </LinearGradientBrush>
-                            </GeometryDrawing.Brush>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1" Brush="#88FFFFFF" />
-                            </GeometryDrawing.Pen>
+                        <GeometryDrawing Brush="Transparent">
                             <GeometryDrawing.Geometry>
-                                <PathGeometry Figures="M 20,4 L 28,4 L 29.5,9.5 L 34.5,11.5 L 39,8.5 L 44.5,14 L 41.5,18.5 L 43.5,23.5 L 49,25 L 49,33 L 43.5,34.5 L 41.5,39.5 L 44.5,44 L 39,49.5 L 34.5,46.5 L 29.5,48.5 L 28,54 L 20,54 L 18.5,48.5 L 13.5,46.5 L 9,49.5 L 3.5,44 L 6.5,39.5 L 4.5,34.5 L -1,33 L -1,25 L 4.5,23.5 L 6.5,18.5 L 3.5,14 L 9,8.5 L 13.5,11.5 L 18.5,9.5 Z" />
+                                <RectangleGeometry Rect="0,0,24,24" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
-                        <!-- Glowing Cyan Hub -->
                         <GeometryDrawing>
                             <GeometryDrawing.Brush>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#60CDFF" Offset="0" />
-                                    <GradientStop Color="#0078D4" Offset="1" />
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="7.77723,2.39557" EndPoint="16.4348,20.5766">
+                                    <GradientStop Color="#29C3FF" Offset="0" />
+                                    <GradientStop Color="#367AF2" Offset="1" />
                                 </LinearGradientBrush>
                             </GeometryDrawing.Brush>
-                            <GeometryDrawing.Pen>
-                                <Pen Thickness="1.5" Brush="#CCFFFFFF" />
-                            </GeometryDrawing.Pen>
                             <GeometryDrawing.Geometry>
-                                <EllipseGeometry Center="24,29" RadiusX="10" RadiusY="10" />
+                                <PathGeometry FillRule="Nonzero" Figures="M18.3277 7.11673C18.9156 6.82277 19.4979 6.45065 20 6.00003V18C20 20.2091 16.4183 22 12 22C7.58172 22 4 20.2091 4 18V6.00003C4.50211 6.45065 5.08441 6.82277 5.67233 7.11673C7.36922 7.96518 9.60849 8.44666 12 8.44666C14.3915 8.44666 16.6308 7.96518 18.3277 7.11673Z" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
-                        <GeometryDrawing Brush="#1E293B">
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <LinearGradientBrush MappingMode="Absolute" Opacity="0.7" StartPoint="14.4762,7.96494" EndPoint="17.6471,23.7208">
+                                    <GradientStop Color="#00FF6CE8" Offset="0.53288" />
+                                    <GradientStop Color="#FF6CE8" Offset="1" />
+                                </LinearGradientBrush>
+                            </GeometryDrawing.Brush>
                             <GeometryDrawing.Geometry>
-                                <EllipseGeometry Center="24,29" RadiusX="4.5" RadiusY="4.5" />
+                                <PathGeometry FillRule="Nonzero" Figures="M18.3277 7.11673C18.9156 6.82277 19.4979 6.45065 20 6.00003V18C20 20.2091 16.4183 22 12 22C7.58172 22 4 20.2091 4 18V6.00003C4.50211 6.45065 5.08441 6.82277 5.67233 7.11673C7.36922 7.96518 9.60849 8.44666 12 8.44666C14.3915 8.44666 16.6308 7.96518 18.3277 7.11673Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="26,14" EndPoint="16.7545,-2.82827">
+                                    <GradientStop Color="#58AAFE" Offset="0" />
+                                    <GradientStop Color="#6CE0FF" Offset="1" />
+                                </LinearGradientBrush>
+                            </GeometryDrawing.Brush>
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="Nonzero" Figures="M12 10C16.4183 10 20 8.20914 20 6C20 3.79086 16.4183 2 12 2C7.58172 2 4 3.79086 4 6C4 8.20914 7.58172 10 12 10Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                    </DrawingGroup>
+                </DrawingImage.Drawing>
+            </DrawingImage>
+
+            <!-- ic_fluent_settings_24_color -->
+            <DrawingImage x:Key="FluentSettingsColorIcon">
+                <DrawingImage.Drawing>
+                    <DrawingGroup>
+                        <GeometryDrawing Brush="Transparent">
+                            <GeometryDrawing.Geometry>
+                                <RectangleGeometry Rect="0,0,24,24" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="16.6816,20.9953" EndPoint="5.7845,3.99641">
+                                    <GradientStop Color="#70777D" Offset="0" />
+                                    <GradientStop Color="#B9C0C7" Offset="1" />
+                                </LinearGradientBrush>
+                            </GeometryDrawing.Brush>
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="EvenOdd" Figures="M12.0122 2.25C12.7462 2.25846 13.4773 2.34326 14.1937 2.50304C14.5064 2.57279 14.7403 2.83351 14.7758 3.15196L14.946 4.67881C15.0231 5.37986 15.615 5.91084 16.3206 5.91158C16.5103 5.91188 16.6979 5.87238 16.8732 5.79483L18.2738 5.17956C18.5651 5.05159 18.9055 5.12136 19.1229 5.35362C20.1351 6.43464 20.8889 7.73115 21.3277 9.14558C21.4223 9.45058 21.3134 9.78203 21.0564 9.9715L19.8149 10.8866C19.4607 11.1468 19.2516 11.56 19.2516 11.9995C19.2516 12.4389 19.4607 12.8521 19.8157 13.1129L21.0582 14.0283C21.3153 14.2177 21.4243 14.5492 21.3297 14.8543C20.8911 16.2685 20.1377 17.5649 19.1261 18.6461C18.9089 18.8783 18.5688 18.9483 18.2775 18.8206L16.8712 18.2045C16.4688 18.0284 16.0068 18.0542 15.6265 18.274C15.2463 18.4937 14.9933 18.8812 14.945 19.3177L14.7759 20.8444C14.741 21.1592 14.5122 21.4182 14.204 21.4915C12.7556 21.8361 11.2465 21.8361 9.79803 21.4915C9.48991 21.4182 9.26105 21.1592 9.22618 20.8444L9.05736 19.32C9.00777 18.8843 8.75434 18.498 8.37442 18.279C7.99451 18.06 7.5332 18.0343 7.1322 18.2094L5.72557 18.8256C5.43422 18.9533 5.09403 18.8833 4.87678 18.6509C3.86462 17.5685 3.11119 16.2705 2.6732 14.8548C2.57886 14.5499 2.68786 14.2186 2.94485 14.0293L4.18818 13.1133C4.54232 12.8531 4.75147 12.4399 4.75147 12.0005C4.75147 11.561 4.54232 11.1478 4.18771 10.8873L2.94516 9.97285C2.6878 9.78345 2.5787 9.45178 2.67337 9.14658C3.11212 7.73215 3.86594 6.43564 4.87813 5.35462C5.09559 5.12236 5.43594 5.05259 5.72724 5.18056L7.12762 5.79572C7.53056 5.97256 7.9938 5.94585 8.37577 5.72269C8.75609 5.50209 9.00929 5.11422 9.05817 4.67764L9.22824 3.15196C9.26376 2.83335 9.49786 2.57254 9.8108 2.50294C10.5281 2.34342 11.26 2.25865 12.0122 2.25ZM11.9997 8.99995C10.3428 8.99995 8.9997 10.3431 8.9997 12C8.9997 13.6568 10.3428 15 11.9997 15C13.6565 15 14.9997 13.6568 14.9997 12C14.9997 10.3431 13.6565 8.99995 11.9997 8.99995Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                    </DrawingGroup>
+                </DrawingImage.Drawing>
+            </DrawingImage>
+
+            <!-- ic_fluent_star_24_color -->
+            <DrawingImage x:Key="FluentStarColorIcon">
+                <DrawingImage.Drawing>
+                    <DrawingGroup>
+                        <GeometryDrawing Brush="Transparent">
+                            <GeometryDrawing.Geometry>
+                                <RectangleGeometry Rect="0,0,24,24" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing>
+                            <GeometryDrawing.Brush>
+                                <LinearGradientBrush MappingMode="Absolute" StartPoint="21.9942,21.9276" EndPoint="1.4273,2.53037">
+                                    <GradientStop Color="#FF6F47" Offset="0" />
+                                    <GradientStop Color="#FFCD0F" Offset="1" />
+                                </LinearGradientBrush>
+                            </GeometryDrawing.Brush>
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="Nonzero" Figures="M10.7878 3.10263C11.283 2.09926 12.7138 2.09925 13.209 3.10263L15.567 7.88036L20.8395 8.6465C21.9468 8.8074 22.3889 10.1682 21.5877 10.9492L17.7724 14.6681L18.6731 19.9193C18.8622 21.0222 17.7047 21.8632 16.7143 21.3425L11.9984 18.8632L7.28252 21.3425C6.29213 21.8632 5.13459 21.0222 5.32374 19.9193L6.2244 14.6681L2.40916 10.9492C1.60791 10.1682 2.05005 8.8074 3.15735 8.6465L8.42988 7.88036L10.7878 3.10263Z" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                    </DrawingGroup>
+                </DrawingImage.Drawing>
+            </DrawingImage>
+
+            <!-- GitHub Octocat -->
+            <DrawingImage x:Key="GithubOctocatIcon">
+                <DrawingImage.Drawing>
+                    <DrawingGroup>
+                        <GeometryDrawing Brush="Transparent">
+                            <GeometryDrawing.Geometry>
+                                <RectangleGeometry Rect="0,0,24,24" />
+                            </GeometryDrawing.Geometry>
+                        </GeometryDrawing>
+                        <GeometryDrawing Brush="#E6EDF3">
+                            <GeometryDrawing.Geometry>
+                                <PathGeometry FillRule="Nonzero" Figures="M12,0.3 C5.37,0.3 0,5.67 0,12.3 C0,17.6 3.44,22.1 8.21,23.69 C8.81,23.8 9.03,23.43 9.03,23.11 C9.03,22.82 9.02,22.06 9.01,21.05 C5.67,21.78 4.97,19.44 4.97,19.44 C4.42,18.05 3.64,17.68 3.64,17.68 C2.55,16.94 3.72,16.95 3.72,16.95 C4.92,17.04 5.56,18.19 5.56,18.19 C6.63,20.02 8.37,19.49 9.05,19.19 C9.16,18.41 9.47,17.89 9.81,17.59 C7.15,17.29 4.34,16.26 4.34,11.66 C4.34,10.35 4.81,9.28 5.58,8.44 C5.46,8.14 5.04,6.92 5.7,5.26 C5.7,5.26 6.71,4.94 9,6.49 C9.96,6.22 10.98,6.09 12,6.09 C13.02,6.09 14.04,6.22 15,6.49 C17.29,4.94 18.3,5.26 18.3,5.26 C18.96,6.92 18.54,8.14 18.42,8.44 C19.19,9.28 19.66,10.35 19.66,11.66 C19.66,16.27 16.85,17.28 14.18,17.58 C14.61,17.95 14.99,18.68 14.99,19.8 C14.99,21.41 14.98,22.7 14.98,23.09 C14.98,23.41 15.2,23.79 15.8,23.67 C20.57,22.1 24,17.6 24,12.3 C24,5.67 18.63,0.3 12,0.3 Z" />
                             </GeometryDrawing.Geometry>
                         </GeometryDrawing>
                     </DrawingGroup>

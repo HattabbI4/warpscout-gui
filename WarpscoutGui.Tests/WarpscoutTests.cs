@@ -1,7 +1,13 @@
 using System.Globalization;
 using System.IO;
+using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Xml.Linq;
+using Wpf.Ui.Controls;
 using Xunit;
 
 namespace WarpscoutGui.Tests;
@@ -491,9 +497,12 @@ public sealed class WarpscoutTests : IDisposable
             Assert.Equal("Scanner", s.NavScanner);
             Assert.Equal("ms", s.UnitMs);
             Assert.Equal("Mbps", s.UnitMbps);
-            Assert.Equal("🟢 Active", s.RowProxyActive);
+            Assert.Equal("Active", s.RowProxyActive);
             Assert.Equal("v1.0 · Ready", s.StatusPillReady("v1.0"));
-            Assert.Equal("★ Best server: DE Frankfurt (FRA)", s.BestServerTitle("DE", "Frankfurt", "FRA"));
+            Assert.Equal("Best server · DE Frankfurt (FRA)", s.BestServerTitle("DE", "Frankfurt", "FRA"));
+            Assert.Equal("On", s.ToggleOn);
+            Assert.Equal("Off", s.ToggleOff);
+            Assert.Equal("AWG 3.1 options (3)", s.HeroAwg31Configured(3));
 
             s.SetLanguage("EN");
             Assert.Single(events);
@@ -504,7 +513,10 @@ public sealed class WarpscoutTests : IDisposable
             Assert.Equal("Сканер", s.NavScanner);
             Assert.Equal("мс", s.UnitMs);
             Assert.Equal("Мбит/с", s.UnitMbps);
-            Assert.Equal("🟢 Активен", s.RowProxyActive);
+            Assert.Equal("Активен", s.RowProxyActive);
+            Assert.Equal("Вкл.", s.ToggleOn);
+            Assert.Equal("Откл.", s.ToggleOff);
+            Assert.Equal("параметры AWG 3.1 (3)", s.HeroAwg31Configured(3));
             Assert.Equal("v1.0 · Готов", s.StatusPillReady("v1.0"));
         }
         finally
@@ -638,7 +650,7 @@ public sealed class WarpscoutTests : IDisposable
         Assert.Equal("https://github.com/HattabbI4/warpscout-gui", MainWindow.GithubRepoUrl);
 
         Strings.Instance.SetLanguage("ru");
-        Assert.Equal("Спасибо за звезду", Strings.Instance.GithubStarText);
+        Assert.Equal("Поставить звезду", Strings.Instance.GithubStarText);
 
         Strings.Instance.SetLanguage("en");
         Assert.Equal("Star on GitHub", Strings.Instance.GithubStarText);
@@ -1330,5 +1342,79 @@ public sealed class WarpscoutTests : IDisposable
         Assert.NotEqual(ruBanner, s.GuiBannerAvailable("v0.5.0"));
         Assert.NotEqual(ruRollback, s.BtnRollback);
         Assert.Contains("v0.5.0", s.GuiBannerAvailable("v0.5.0"));
+    }
+
+    [Fact]
+    public void AppResources_PreserveWpfUiCardAndToggleTemplates()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                if (System.Windows.Application.Current is not App app)
+                {
+                    app = new App();
+                    app.InitializeComponent();
+                }
+
+                foreach (var targetType in new[] { typeof(CardControl), typeof(CardExpander), typeof(ToggleSwitch) })
+                {
+                    var style = Assert.IsType<Style>(app.TryFindResource(targetType));
+                    Assert.NotNull(style.BasedOn);
+                    Assert.NotNull(FindSetterValue(style, System.Windows.Controls.Control.TemplateProperty));
+                }
+
+                var toggleStyle = Assert.IsType<Style>(app.TryFindResource(typeof(ToggleSwitch)));
+                Assert.NotNull(FindSetterValue(toggleStyle, System.Windows.Controls.Panel.BackgroundProperty));
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (failure != null)
+            ExceptionDispatchInfo.Capture(failure).Throw();
+
+        static object? FindSetterValue(Style? style, DependencyProperty property)
+        {
+            for (var cur = style; cur != null; cur = cur.BasedOn)
+            {
+                foreach (var item in cur.Setters)
+                {
+                    if (item is Setter setter && setter.Property == property)
+                        return setter.Value;
+                }
+            }
+            return null;
+        }
+    }
+
+    [Fact]
+    public void MainWindowXaml_KeepsSidebarToggleOutsideTitleBarAndEllipsisOutOfHorizontalStackPanels()
+    {
+        var doc = XDocument.Load(ResolveRepoFile("MainWindow.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var elements = doc.Descendants().ToList();
+        var btnToggle = elements.Single(e => e.Attribute(x + "Name")?.Value == "BtnToggleSidebar");
+        var titleBar = elements.Single(e => e.Attribute(x + "Name")?.Value == "AppTitleBar");
+
+        Assert.DoesNotContain(titleBar, btnToggle.Ancestors());
+        Assert.Same(btnToggle.Parent, titleBar.Parent);
+        Assert.NotEqual(btnToggle.Attribute("Grid.Column")?.Value, titleBar.Attribute("Grid.Column")?.Value);
+
+        var brokenEllipsis = elements
+            .Where(e => e.Name.LocalName == "TextBlock" && e.Attribute("TextTrimming")?.Value == "CharacterEllipsis")
+            .Where(tb => tb.Parent is { Name.LocalName: "StackPanel" } sp && sp.Attribute("Orientation")?.Value == "Horizontal")
+            .ToList();
+        Assert.Empty(brokenEllipsis);
+
+        static string ResolveRepoFile(string fileName, [CallerFilePath] string callerPath = "") =>
+            Path.GetFullPath(Path.Combine(Path.GetDirectoryName(callerPath)!, "..", fileName));
     }
 }
