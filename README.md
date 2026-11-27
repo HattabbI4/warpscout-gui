@@ -23,6 +23,8 @@
 
 ---
 
+**[Версия для macOS](https://github.com/HattabbI4/warpscout-gui-macos)**
+
 ## Возможности
 
 - **Нативный интерфейс Windows 11 (Fluent 2 / Mica):** системный фон Mica, тёмная тема, сворачиваемое боковое меню и переключение языка интерфейса (`RU` / `EN`) на базе [WPF-UI](https://github.com/lepoco/wpfui).

@@ -23,6 +23,8 @@
 
 ---
 
+**[macOS version](https://github.com/HattabbI4/warpscout-gui-macos)**
+
 ## Features
 
 - **Native Windows 11 UI (Fluent 2 / Mica):** Windows 11 Mica backdrop, dark theme, collapsible sidebar, and instant `RU` / `EN` language switching powered by [WPF-UI](https://github.com/lepoco/wpfui).
